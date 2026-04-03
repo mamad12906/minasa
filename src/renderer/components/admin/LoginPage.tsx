@@ -2,16 +2,18 @@ import React, { useState } from 'react'
 import { Card, Form, Input, Button, message, Collapse } from 'antd'
 import { UserOutlined, LockOutlined, GlobalOutlined, SettingOutlined } from '@ant-design/icons'
 import { useAuth } from '../../App'
-import { setServerUrl, getServerUrl } from '../../api/http'
+import { setServerUrl, getServerUrl, setApiKey, getApiKey } from '../../api/http'
 
 export default function LoginPage() {
   const { login } = useAuth()
   const [loading, setLoading] = useState(false)
   const [serverUrlInput, setServerUrlInput] = useState(getServerUrl())
+  const [apiKeyInput, setApiKeyInput] = useState(getApiKey())
 
   const handleLogin = async (values: any) => {
-    // Save server URL
+    // Save server URL and API key
     setServerUrl(serverUrlInput)
+    setApiKey(apiKeyInput)
 
     setLoading(true)
     try {
@@ -67,11 +69,18 @@ export default function LoginPage() {
               key: 'server',
               label: <span style={{ color: '#999', fontSize: 13 }}><SettingOutlined /> إعدادات السيرفر</span>,
               children: (
-                <Input prefix={<GlobalOutlined style={{ color: '#bbb' }} />}
-                  value={serverUrlInput}
-                  onChange={e => setServerUrlInput(e.target.value)}
-                  placeholder="http://localhost:3000"
-                  style={{ borderRadius: 10 }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <Input prefix={<GlobalOutlined style={{ color: '#bbb' }} />}
+                    value={serverUrlInput}
+                    onChange={e => setServerUrlInput(e.target.value)}
+                    placeholder="رابط السيرفر"
+                    style={{ borderRadius: 10 }} />
+                  <Input.Password prefix={<LockOutlined style={{ color: '#bbb' }} />}
+                    value={apiKeyInput}
+                    onChange={e => setApiKeyInput(e.target.value)}
+                    placeholder="مفتاح API"
+                    style={{ borderRadius: 10 }} />
+                </div>
               )
             }]} />
 

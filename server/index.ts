@@ -14,12 +14,41 @@ dotenv.config()
 
 const app = express()
 const PORT = process.env.PORT || 3000
+const API_KEY = process.env.API_KEY || ''
 
 app.use(cors())
 app.use(express.json({ limit: '50mb' }))
 
-// Health check
-app.get('/', (_req, res) => res.json({ status: 'ok', name: 'Minasa API' }))
+// API Key protection - all /api/* routes require it
+app.use('/api', (req, res, next) => {
+  if (API_KEY) {
+    const clientKey = req.headers['x-api-key']
+    if (clientKey !== API_KEY) {
+      return res.status(403).json({ error: 'مفتاح API غير صالح' })
+    }
+  }
+  next()
+})
+
+// Rate limiting - simple in-memory
+const rateLimits = new Map<string, { count: number; reset: number }>()
+app.use('/api', (req, res, next) => {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown'
+  const now = Date.now()
+  const limit = rateLimits.get(ip)
+  if (limit && now < limit.reset) {
+    if (limit.count >= 200) {
+      return res.status(429).json({ error: 'طلبات كثيرة، حاول لاحقاً' })
+    }
+    limit.count++
+  } else {
+    rateLimits.set(ip, { count: 1, reset: now + 60000 })
+  }
+  next()
+})
+
+// Health check (no API key needed)
+app.get('/', (_req, res) => res.json({ status: 'ok' }))
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
 
 // Routes
@@ -34,7 +63,7 @@ app.use('/api/dashboard', dashboardRoutes)
 async function start() {
   await initDB()
   app.listen(PORT, () => {
-    console.log(`Minasa API server running on port ${PORT}`)
+    console.log(`Minasa API running on port ${PORT}`)
   })
 }
 

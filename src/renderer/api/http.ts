@@ -1,8 +1,16 @@
 // HTTP API client that replaces IPC calls
 // This connects to the Express server instead of Electron main process
 
-let BASE_URL = localStorage.getItem('minasa_server_url') || 'http://localhost:3000'
+let BASE_URL = localStorage.getItem('minasa_server_url') || ''
 let AUTH_TOKEN = localStorage.getItem('minasa_token') || ''
+let API_KEY = localStorage.getItem('minasa_api_key') || ''
+
+export function setApiKey(key: string) {
+  API_KEY = key
+  localStorage.setItem('minasa_api_key', key)
+}
+
+export function getApiKey() { return API_KEY }
 
 export function setServerUrl(url: string) {
   BASE_URL = url.replace(/\/+$/, '')
@@ -29,7 +37,8 @@ async function request(method: string, path: string, body?: any) {
     method,
     headers: {
       'Content-Type': 'application/json',
-      ...(AUTH_TOKEN ? { Authorization: `Bearer ${AUTH_TOKEN}` } : {})
+      ...(AUTH_TOKEN ? { Authorization: `Bearer ${AUTH_TOKEN}` } : {}),
+      ...(API_KEY ? { 'x-api-key': API_KEY } : {})
     }
   }
   if (body && method !== 'GET') opts.body = JSON.stringify(body)

@@ -217,7 +217,7 @@ export default function Sidebar() {
         </div>
         <Button type="text" danger block icon={<LogoutOutlined />} onClick={logout}
           style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>تسجيل خروج</Button>
-        <div style={{ textAlign: 'center', marginTop: 8, color: 'rgba(255,255,255,0.25)', fontSize: 10 }}>v1.0.3</div>
+        <div style={{ textAlign: 'center', marginTop: 8, color: 'rgba(255,255,255,0.25)', fontSize: 10 }}>v1.0.4</div>
       </div>
 
       <style>{`
