@@ -22,11 +22,13 @@ export default function CustomerForm({ open, customer, onClose, onSave, platform
   const hasReminder = Form.useWatch('has_reminder', form)
   const [adminCategories, setAdminCategories] = useState<{ id: number; name: string }[]>([])
   const [adminPlatforms, setAdminPlatforms] = useState<{ id: number; name: string }[]>([])
+  const [allUsers, setAllUsers] = useState<any[]>([])
 
   useEffect(() => {
     window.api.categories.list().then(setAdminCategories).catch(() => {})
     if (isAdmin) {
       window.api.platforms.list().then(setAdminPlatforms).catch(() => {})
+      window.api.users.list().then((users: any[]) => setAllUsers(users.filter(u => u.role !== 'admin'))).catch(() => {})
     }
   }, [open])
 
@@ -146,6 +148,14 @@ export default function CustomerForm({ open, customer, onClose, onSave, platform
         <Form.Item name="category" label="صنف الزبون">
           <Select allowClear placeholder="اختر صنف الزبون" options={catOptions} />
         </Form.Item>
+
+        {isAdmin && customer && (
+          <Form.Item name="user_id" label="نقل الزبون إلى موظف">
+            <Select allowClear placeholder="اختر الموظف">
+              {allUsers.map(u => <Select.Option key={u.id} value={u.id}>{u.display_name}</Select.Option>)}
+            </Select>
+          </Form.Item>
+        )}
 
         <Form.Item name="status_note" label="الحالة">
           <Input.TextArea placeholder="مثال: تذبذب شمول، قيد المراجعة..." rows={2} />
