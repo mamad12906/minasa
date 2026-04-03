@@ -17,11 +17,23 @@ router.get('/stats', async (req: AuthRequest, res) => {
   const mins = await pool.query(`SELECT ministry_name, COUNT(*)::int as count FROM customers WHERE ministry_name != '' ${filterAnd} GROUP BY ministry_name ORDER BY count DESC LIMIT 15`, params)
   const recent = await pool.query(`SELECT *, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI') as created_at_fmt FROM customers ${filter} ORDER BY created_at DESC LIMIT 10`, params)
 
+  // Employee customer counts (admin only)
+  let employeeStats: any[] = []
+  if (isAdmin) {
+    const emp = await pool.query(`
+      SELECT u.id, u.display_name, COALESCE(c.count, 0)::int as customer_count
+      FROM users u LEFT JOIN (SELECT user_id, COUNT(*) as count FROM customers GROUP BY user_id) c ON c.user_id = u.id
+      WHERE u.role != 'admin' ORDER BY customer_count DESC
+    `)
+    employeeStats = emp.rows
+  }
+
   res.json({
     totalCustomers: Number(customers.rows[0].total),
     categoryBreakdown: cats.rows,
     ministryBreakdown: mins.rows,
-    recentCustomers: recent.rows.map(r => ({ ...r, created_at: r.created_at_fmt || r.created_at }))
+    recentCustomers: recent.rows.map(r => ({ ...r, created_at: r.created_at_fmt || r.created_at })),
+    employeeStats
   })
 })
 

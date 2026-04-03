@@ -11,6 +11,7 @@ import ExcelImport from './components/import-export/ExcelImport'
 import AdminPanel from './components/admin/AdminPanel'
 import BackupPage from './components/backup/BackupPage'
 import AddCustomer from './components/customers/AddCustomer'
+import EditCustomer from './components/customers/EditCustomer'
 import LoginPage from './components/admin/LoginPage'
 
 // Make api globally available as window.api
@@ -62,6 +63,7 @@ export default function App() {
                   <Route index element={<Dashboard />} />
                   {can('customers') && <Route path="customers" element={<CustomerTable />} />}
                   {can('customers') && <Route path="add-customer" element={<AddCustomer />} />}
+                  {can('customers') && <Route path="edit-customer/:id" element={<EditCustomer />} />}
                   {can('import') && <Route path="import" element={<ExcelImport />} />}
                   <Route path="backup" element={<BackupPage />} />
                   {user.role === 'admin' && <Route path="admin" element={<AdminPanel />} />}

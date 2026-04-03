@@ -129,7 +129,7 @@ export default function CustomerTable() {
         <Button type="link" size="small" icon={<EyeOutlined />}
           onClick={() => setDetailCustomer(record)} />
         <Button type="link" size="small" icon={<EditOutlined />}
-          onClick={() => { setEditCustomer(record); setFormOpen(true) }} />
+          onClick={() => navigate(`/edit-customer/${record.id}`)} />
         <Popconfirm title="هل أنت متأكد من الحذف؟" onConfirm={() => handleDelete(record.id)}
           okText="نعم" cancelText="لا">
           <Button type="link" size="small" danger icon={<DeleteOutlined />} />

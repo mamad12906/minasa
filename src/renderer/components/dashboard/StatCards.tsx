@@ -142,6 +142,45 @@ export default function Dashboard() {
         </Col>
       </Row>
 
+      {/* Employee Stats - Admin only */}
+      {isAdmin && stats.employeeStats && stats.employeeStats.length > 0 && (
+        <div className="hover-card" style={{
+          background: '#fff', borderRadius: 14, padding: '20px 24px',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.06)',
+          transition: 'all 0.35s cubic-bezier(.4,0,.2,1)', marginBottom: 24
+        }}>
+          <h3 style={{ borderBottom: '2px solid #f0f0f0', paddingBottom: 12 }}>
+            <TeamOutlined style={{ marginLeft: 8, color: '#667eea' }} />زبائن كل موظف
+          </h3>
+          <Row gutter={[12, 12]}>
+            {stats.employeeStats.map((emp: any) => {
+              const maxCount = stats.employeeStats[0]?.customer_count || 1
+              const pct = Math.round((emp.customer_count / maxCount) * 100)
+              return (
+                <Col xs={24} sm={12} lg={8} key={emp.id}>
+                  <div style={{
+                    padding: '14px 16px', borderRadius: 12, background: '#f8f9ff',
+                    border: '1px solid #e8ecff', transition: 'all 0.3s'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontWeight: 600, fontSize: 14 }}>{emp.display_name}</span>
+                      <Tag color="blue" style={{ fontSize: 15, padding: '1px 12px', fontWeight: 'bold' }}>{emp.customer_count}</Tag>
+                    </div>
+                    <div style={{ height: 8, background: '#e8ecff', borderRadius: 4, overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%', borderRadius: 4,
+                        background: 'linear-gradient(90deg, #667eea, #764ba2)',
+                        width: `${pct}%`, transition: 'width 1.2s ease', minWidth: pct > 0 ? 8 : 0
+                      }} />
+                    </div>
+                  </div>
+                </Col>
+              )
+            })}
+          </Row>
+        </div>
+      )}
+
       {/* Recent Customers */}
       <div className="hover-card" style={{
         background: '#fff', borderRadius: 14, padding: '20px 24px',
