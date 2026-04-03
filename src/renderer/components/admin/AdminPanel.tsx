@@ -202,6 +202,9 @@ export default function AdminPanel() {
             { title: 'اسم المستخدم', dataIndex: 'username', key: 'username',
               render: (v: string) => <strong>{v}</strong> },
             { title: 'الاسم', dataIndex: 'display_name', key: 'display_name' },
+            { title: 'عدد الزبائن', dataIndex: 'customer_count', key: 'customer_count',
+              render: (v: number) => <Tag color={v > 0 ? 'blue' : 'default'} style={{ fontSize: 14, padding: '2px 12px' }}>{v || 0}</Tag>
+            },
             { title: 'الدور', dataIndex: 'role', key: 'role',
               render: (v: string) => v === 'admin'
                 ? <Tag color="gold" icon={<CrownOutlined />}>أدمن</Tag>

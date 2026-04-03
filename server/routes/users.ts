@@ -12,7 +12,12 @@ function hashPassword(password: string): string {
 }
 
 router.get('/', async (_req, res) => {
-  const r = await pool.query('SELECT * FROM users ORDER BY created_at ASC')
+  const r = await pool.query(`
+    SELECT u.*, COALESCE(c.count, 0)::int as customer_count
+    FROM users u
+    LEFT JOIN (SELECT user_id, COUNT(*) as count FROM customers GROUP BY user_id) c ON c.user_id = u.id
+    ORDER BY u.created_at ASC
+  `)
   res.json(r.rows)
 })
 

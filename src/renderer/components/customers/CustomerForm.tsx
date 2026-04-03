@@ -152,6 +152,7 @@ export default function CustomerForm({ open, customer, onClose, onSave, platform
         {isAdmin && customer && (
           <Form.Item name="user_id" label="نقل الزبون إلى موظف">
             <Select allowClear placeholder="اختر الموظف">
+              <Select.Option key={user?.id} value={user?.id}>📌 إليّ (الأدمن)</Select.Option>
               {allUsers.map(u => <Select.Option key={u.id} value={u.id}>{u.display_name}</Select.Option>)}
             </Select>
           </Form.Item>
