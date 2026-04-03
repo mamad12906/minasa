@@ -81,13 +81,21 @@ export async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_reminders_done ON reminders(is_done);
   `)
 
-  // Create default admin
+  // Create default admin (password is sha256 hashed)
   const admin = await pool.query("SELECT id FROM users WHERE role = 'admin' LIMIT 1")
   if (admin.rows.length === 0) {
     await pool.query(
       "INSERT INTO users (username, password, display_name, role, permissions) VALUES ($1, $2, $3, $4, $5)",
-      ['admin', 'admin', 'مدير النظام', 'admin', '{}']
+      ['admin', 'eb778f8ff7c8e4850f95aa12441aae3b27ea867bb6820e20e695352b897b95bf', 'مدير النظام', 'admin', '{}']
     )
+  }
+
+  // Migrate: rehash admin password if it's still plain text
+  const adminUser = await pool.query("SELECT id, password FROM users WHERE username = 'admin' AND role = 'admin' LIMIT 1")
+  if (adminUser.rows.length > 0 && adminUser.rows[0].password.length < 64) {
+    const crypto = await import('crypto')
+    const hashed = crypto.createHash('sha256').update(adminUser.rows[0].password).digest('hex')
+    await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashed, adminUser.rows[0].id])
   }
 
   console.log('Database initialized')

@@ -1,12 +1,18 @@
 import { Router } from 'express'
+import crypto from 'crypto'
 import { pool } from '../db'
 import { generateToken } from '../middleware/auth'
 
 const router = Router()
 
+function hashPassword(password: string): string {
+  return crypto.createHash('sha256').update(password).digest('hex')
+}
+
 router.post('/login', async (req, res) => {
   const { username, password } = req.body
-  const result = await pool.query('SELECT * FROM users WHERE username = $1 AND password = $2', [username, password])
+  const hashed = hashPassword(password)
+  const result = await pool.query('SELECT * FROM users WHERE username = $1 AND password = $2', [username, hashed])
   if (result.rows.length === 0) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور خطأ' })
   const user = result.rows[0]
   const token = generateToken(user)
