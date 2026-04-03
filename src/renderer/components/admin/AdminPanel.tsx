@@ -202,9 +202,6 @@ export default function AdminPanel() {
             { title: 'اسم المستخدم', dataIndex: 'username', key: 'username',
               render: (v: string) => <strong>{v}</strong> },
             { title: 'الاسم', dataIndex: 'display_name', key: 'display_name' },
-            { title: 'المنصة', dataIndex: 'platform_name', key: 'platform_name',
-              render: (v: string) => v ? <Tag color="blue">{v}</Tag> : <Tag>كل المنصات</Tag>
-            },
             { title: 'الدور', dataIndex: 'role', key: 'role',
               render: (v: string) => v === 'admin'
                 ? <Tag color="gold" icon={<CrownOutlined />}>أدمن</Tag>
@@ -261,15 +258,6 @@ export default function AdminPanel() {
               { value: 'admin', label: 'أدمن (كل الصلاحيات - كل المنصات)' },
               { value: 'user', label: 'مستخدم (منصة محددة)' }
             ]} />
-          </Form.Item>
-
-          <Form.Item name="platform_name" label="المنصة المخصصة"
-            extra="الأدمن يرى كل المنصات. المستخدم العادي يرى فقط زبائن منصته.">
-            <Select allowClear placeholder="اختر المنصة (اتركها فارغة للأدمن)">
-              {platforms.map(p => (
-                <Select.Option key={p.id} value={p.name}>{p.name}</Select.Option>
-              ))}
-            </Select>
           </Form.Item>
 
           <Divider>الصلاحيات (للمستخدم العادي)</Divider>

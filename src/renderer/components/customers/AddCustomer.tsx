@@ -21,7 +21,7 @@ export default function AddCustomer() {
 
   useEffect(() => {
     window.api.categories.list().then(setCategories).catch(() => {})
-    if (isAdmin) window.api.platforms.list().then(setPlatforms).catch(() => {})
+    window.api.platforms.list().then(setPlatforms).catch(() => {})
   }, [])
 
   const handleSave = async () => {
@@ -125,18 +125,12 @@ export default function AddCustomer() {
                   <Checkbox><LinkOutlined /> ربط الزبون بمنصة</Checkbox>
                 </Form.Item>
                 {linkToPlatform && (
-                  isAdmin ? (
-                    <Form.Item name="platform_name" label="اسم المنصة"
-                      rules={[{ required: true, message: 'اختر المنصة' }]}>
-                      <Select allowClear placeholder="اختر المنصة">
-                        {platforms.map(p => <Select.Option key={p.id} value={p.name}>{p.name}</Select.Option>)}
-                      </Select>
-                    </Form.Item>
-                  ) : (
-                    <Form.Item label="اسم المنصة">
-                      <Input value={user?.platform_name} disabled style={{ background: '#f5f5f5' }} />
-                    </Form.Item>
-                  )
+                  <Form.Item name="platform_name" label="اسم المنصة"
+                    rules={[{ required: true, message: 'اختر المنصة' }]}>
+                    <Select allowClear placeholder="اختر المنصة">
+                      {platforms.map(p => <Select.Option key={p.id} value={p.name}>{p.name}</Select.Option>)}
+                    </Select>
+                  </Form.Item>
                 )}
                 <Form.Item name="ministry_name" label="اسم الوزارة">
                   <Input prefix={<BankOutlined />} placeholder="أدخل اسم الوزارة" />

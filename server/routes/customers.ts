@@ -31,11 +31,12 @@ router.get('/', async (req: AuthRequest, res) => {
 
   const countResult = await pool.query(`SELECT COUNT(*) as total FROM customers ${where}`, params)
   const dataResult = await pool.query(
-    `SELECT * FROM customers ${where} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
+    `SELECT *, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI') as created_at_fmt FROM customers ${where} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
     [...params, Number(pageSize), offset]
   )
 
-  res.json({ data: dataResult.rows, total: Number(countResult.rows[0].total), page: Number(page), pageSize: Number(pageSize) })
+  const data = dataResult.rows.map(r => ({ ...r, created_at: r.created_at_fmt || r.created_at }))
+  res.json({ data, total: Number(countResult.rows[0].total), page: Number(page), pageSize: Number(pageSize) })
 })
 
 // Get single customer
@@ -77,9 +78,12 @@ router.post('/', async (req: AuthRequest, res) => {
 // Update customer
 router.put('/:id', async (req: AuthRequest, res) => {
   const input = req.body
+  // Preserve original user_id - don't let it get reset to 0
+  const existing = await pool.query('SELECT user_id FROM customers WHERE id = $1', [req.params.id])
+  const originalUserId = existing.rows[0]?.user_id || req.user!.id
   const result = await pool.query(
     `UPDATE customers SET platform_name=$1, full_name=$2, mother_name=$3, phone_number=$4, card_number=$5, category=$6, ministry_name=$7, status_note=$8, reminder_date=$9, reminder_text=$10, user_id=$11, months_count=$12, notes=$13, updated_at=NOW() WHERE id=$14 RETURNING *`,
-    [input.platform_name||'', input.full_name, input.mother_name||'', input.phone_number||'', input.card_number||'', input.category||'', input.ministry_name||'', input.status_note||'', input.reminder_date||'', input.reminder_text||'', input.user_id||0, input.months_count||0, input.notes||'', req.params.id]
+    [input.platform_name||'', input.full_name, input.mother_name||'', input.phone_number||'', input.card_number||'', input.category||'', input.ministry_name||'', input.status_note||'', input.reminder_date||'', input.reminder_text||'', input.user_id || originalUserId, input.months_count||0, input.notes||'', req.params.id]
   )
   // Sync reminder
   if (input.reminder_date && input.reminder_text) {
