@@ -1,0 +1,286 @@
+import React, { useEffect, useState } from 'react'
+import { Card, Table, Button, Modal, Form, Input, Select, Switch, Popconfirm, message, Space, Tag, Row, Col, Divider } from 'antd'
+import { PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined, CrownOutlined, AppstoreOutlined, TagsOutlined } from '@ant-design/icons'
+
+const SECTIONS = [
+  { key: 'customers', label: 'الزبائن' },
+  { key: 'import', label: 'استيراد Excel' },
+  { key: 'export', label: 'تصدير Excel' },
+]
+
+export default function AdminPanel() {
+  const [users, setUsers] = useState<any[]>([])
+  const [platforms, setPlatforms] = useState<any[]>([])
+  const [adminCategories, setAdminCategories] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editUser, setEditUser] = useState<any>(null)
+  const [form] = Form.useForm()
+  const [newPlatform, setNewPlatform] = useState('')
+  const [newCategory, setNewCategory] = useState('')
+
+  const loadUsers = async () => {
+    setLoading(true)
+    const list = await window.api.users.list()
+    setUsers(list)
+    setLoading(false)
+  }
+
+  const loadPlatforms = async () => {
+    const list = await window.api.platforms.list()
+    setPlatforms(list)
+  }
+
+  const loadCategories = async () => {
+    const list = await window.api.categories.list()
+    setAdminCategories(list)
+  }
+
+  useEffect(() => { loadUsers(); loadPlatforms(); loadCategories() }, [])
+
+  const handleAddPlatform = async () => {
+    if (!newPlatform.trim()) return
+    const res = await window.api.platforms.add(newPlatform.trim())
+    if ((res as any).error) {
+      message.error('المنصة موجودة مسبقاً')
+    } else {
+      message.success('تم إضافة المنصة')
+      setNewPlatform('')
+      loadPlatforms()
+    }
+  }
+
+  const handleDeletePlatform = async (id: number) => {
+    await window.api.platforms.delete(id)
+    message.success('تم حذف المنصة')
+    loadPlatforms()
+  }
+
+  const handleAddCategory = async () => {
+    if (!newCategory.trim()) return
+    const res = await window.api.categories.add(newCategory.trim())
+    if ((res as any).error) {
+      message.error('الصنف موجود مسبقاً')
+    } else {
+      message.success('تم إضافة الصنف')
+      setNewCategory('')
+      loadCategories()
+    }
+  }
+
+  const handleDeleteCategory = async (id: number) => {
+    await window.api.categories.delete(id)
+    message.success('تم حذف الصنف')
+    loadCategories()
+  }
+
+  const handleAdd = () => {
+    setEditUser(null)
+    form.resetFields()
+    form.setFieldsValue({ role: 'user' })
+    SECTIONS.forEach(s => form.setFieldValue(`perm_${s.key}`, true))
+    setModalOpen(true)
+  }
+
+  const handleEdit = (user: any) => {
+    setEditUser(user)
+    let perms: any = {}
+    try { perms = JSON.parse(user.permissions || '{}') } catch {}
+    form.setFieldsValue({
+      username: user.username,
+      display_name: user.display_name,
+      role: user.role,
+      platform_name: user.platform_name || undefined,
+      password: ''
+    })
+    SECTIONS.forEach(s => form.setFieldValue(`perm_${s.key}`, perms[s.key] !== false))
+    setModalOpen(true)
+  }
+
+  const handleSave = async () => {
+    const values = await form.validateFields()
+    const perms: Record<string, boolean> = {}
+    SECTIONS.forEach(s => { perms[s.key] = values[`perm_${s.key}`] !== false })
+    const permStr = JSON.stringify(perms)
+    const platName = values.platform_name || ''
+
+    if (editUser) {
+      const res = await window.api.users.update(editUser.id, values.display_name, values.password || null, permStr, platName)
+      if ((res as any).error) { message.error((res as any).error); return }
+      message.success('تم تعديل المستخدم')
+    } else {
+      if (!values.password) { message.error('يرجى إدخال كلمة المرور'); return }
+      const res = await window.api.users.create(values.username, values.password, values.display_name, values.role, permStr, platName)
+      if ((res as any).error) {
+        message.error((res as any).error.includes('UNIQUE') ? 'اسم المستخدم موجود مسبقاً' : (res as any).error)
+        return
+      }
+      message.success('تم إنشاء المستخدم')
+    }
+    setModalOpen(false)
+    loadUsers()
+  }
+
+  const handleDelete = async (id: number) => {
+    await window.api.users.delete(id)
+    message.success('تم حذف المستخدم')
+    loadUsers()
+  }
+
+  return (
+    <div>
+      {/* Platform Management */}
+      <Card style={{ borderRadius: 14, border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.06)', marginBottom: 24 }}>
+        <h2 style={{ margin: '0 0 16px' }}>
+          <AppstoreOutlined style={{ marginLeft: 8, color: '#1677ff' }} />إدارة المنصات
+        </h2>
+        <Row gutter={12} style={{ marginBottom: 16 }}>
+          <Col flex="auto">
+            <Input placeholder="أدخل اسم المنصة الجديدة..." value={newPlatform}
+              onChange={e => setNewPlatform(e.target.value)}
+              onPressEnter={handleAddPlatform}
+              style={{ borderRadius: 8 }} />
+          </Col>
+          <Col>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAddPlatform}
+              style={{ borderRadius: 8 }}>إضافة منصة</Button>
+          </Col>
+        </Row>
+        <Space size={8} wrap>
+          {platforms.map(p => (
+            <Tag key={p.id} closable onClose={() => handleDeletePlatform(p.id)}
+              color="blue" style={{ fontSize: 14, padding: '4px 12px', borderRadius: 8 }}>
+              {p.name}
+            </Tag>
+          ))}
+          {platforms.length === 0 && <span style={{ color: '#999' }}>لا توجد منصات بعد. أضف منصة أعلاه.</span>}
+        </Space>
+      </Card>
+
+      {/* Category Management */}
+      <Card style={{ borderRadius: 14, border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.06)', marginBottom: 24 }}>
+        <h2 style={{ margin: '0 0 16px' }}>
+          <TagsOutlined style={{ marginLeft: 8, color: '#a18cd1' }} />إدارة أصناف الزبائن
+        </h2>
+        <Row gutter={12} style={{ marginBottom: 16 }}>
+          <Col flex="auto">
+            <Input placeholder="أدخل اسم الصنف الجديد..." value={newCategory}
+              onChange={e => setNewCategory(e.target.value)}
+              onPressEnter={handleAddCategory}
+              style={{ borderRadius: 8 }} />
+          </Col>
+          <Col>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAddCategory}
+              style={{ borderRadius: 8, background: '#a18cd1', borderColor: '#a18cd1' }}>إضافة صنف</Button>
+          </Col>
+        </Row>
+        <Space size={8} wrap>
+          {adminCategories.map(c => (
+            <Tag key={c.id} closable onClose={() => handleDeleteCategory(c.id)}
+              color="purple" style={{ fontSize: 14, padding: '4px 12px', borderRadius: 8 }}>
+              {c.name}
+            </Tag>
+          ))}
+          {adminCategories.length === 0 && <span style={{ color: '#999' }}>لا توجد أصناف بعد.</span>}
+        </Space>
+      </Card>
+
+      {/* User Management */}
+      <Card style={{ borderRadius: 14, border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.06)' }}>
+        <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+          <Col>
+            <h2 style={{ margin: 0 }}><CrownOutlined style={{ marginLeft: 8, color: '#faad14' }} />إدارة المستخدمين</h2>
+          </Col>
+          <Col>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}
+              style={{ borderRadius: 8 }}>إضافة مستخدم</Button>
+          </Col>
+        </Row>
+
+        <Table dataSource={users} rowKey="id" loading={loading} pagination={false} size="middle"
+          columns={[
+            { title: 'اسم المستخدم', dataIndex: 'username', key: 'username',
+              render: (v: string) => <strong>{v}</strong> },
+            { title: 'الاسم', dataIndex: 'display_name', key: 'display_name' },
+            { title: 'المنصة', dataIndex: 'platform_name', key: 'platform_name',
+              render: (v: string) => v ? <Tag color="blue">{v}</Tag> : <Tag>كل المنصات</Tag>
+            },
+            { title: 'الدور', dataIndex: 'role', key: 'role',
+              render: (v: string) => v === 'admin'
+                ? <Tag color="gold" icon={<CrownOutlined />}>أدمن</Tag>
+                : <Tag color="blue" icon={<UserOutlined />}>مستخدم</Tag>
+            },
+            { title: 'الصلاحيات', key: 'perms',
+              render: (_: any, record: any) => {
+                if (record.role === 'admin') return <Tag color="green">كل الصلاحيات</Tag>
+                let perms: any = {}
+                try { perms = JSON.parse(record.permissions || '{}') } catch {}
+                return (
+                  <Space size={4} wrap>
+                    {SECTIONS.map(s => (
+                      <Tag key={s.key} color={perms[s.key] !== false ? 'green' : 'red'} style={{ fontSize: 11 }}>
+                        {s.label}: {perms[s.key] !== false ? '✓' : '✗'}
+                      </Tag>
+                    ))}
+                  </Space>
+                )
+              }
+            },
+            { title: 'إجراءات', key: 'actions', width: 120,
+              render: (_: any, record: any) => (
+                <Space>
+                  <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
+                  {record.role !== 'admin' && (
+                    <Popconfirm title="حذف المستخدم؟" onConfirm={() => handleDelete(record.id)} okText="نعم" cancelText="لا">
+                      <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+                    </Popconfirm>
+                  )}
+                </Space>
+              )
+            }
+          ]}
+        />
+      </Card>
+
+      <Modal title={editUser ? 'تعديل مستخدم' : 'إضافة مستخدم جديد'}
+        open={modalOpen} onOk={handleSave} onCancel={() => setModalOpen(false)}
+        okText="حفظ" cancelText="إلغاء" width={520} destroyOnClose>
+        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item name="username" label="اسم المستخدم" rules={[{ required: true }]}>
+            <Input placeholder="admin, user1..." disabled={!!editUser} />
+          </Form.Item>
+          <Form.Item name="display_name" label="الاسم الظاهر" rules={[{ required: true }]}>
+            <Input placeholder="مثال: أحمد محمد" />
+          </Form.Item>
+          <Form.Item name="password" label={editUser ? 'كلمة المرور الجديدة (اتركها فارغة للإبقاء)' : 'كلمة المرور'}
+            rules={editUser ? [] : [{ required: true }]}>
+            <Input.Password placeholder="كلمة المرور" />
+          </Form.Item>
+          <Form.Item name="role" label="الدور">
+            <Select options={[
+              { value: 'admin', label: 'أدمن (كل الصلاحيات - كل المنصات)' },
+              { value: 'user', label: 'مستخدم (منصة محددة)' }
+            ]} />
+          </Form.Item>
+
+          <Form.Item name="platform_name" label="المنصة المخصصة"
+            extra="الأدمن يرى كل المنصات. المستخدم العادي يرى فقط زبائن منصته.">
+            <Select allowClear placeholder="اختر المنصة (اتركها فارغة للأدمن)">
+              {platforms.map(p => (
+                <Select.Option key={p.id} value={p.name}>{p.name}</Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Divider>الصلاحيات (للمستخدم العادي)</Divider>
+          {SECTIONS.map(s => (
+            <Form.Item key={s.key} name={`perm_${s.key}`} label={s.label} valuePropName="checked"
+              style={{ marginBottom: 8 }}>
+              <Switch checkedChildren="مفعّل" unCheckedChildren="مخفي" />
+            </Form.Item>
+          ))}
+        </Form>
+      </Modal>
+    </div>
+  )
+}

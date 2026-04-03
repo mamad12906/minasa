@@ -1,0 +1,61 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  direction: rtl;
+  font-family: 'Segoe UI', Tahoma, 'Noto Sans Arabic', Arial, sans-serif;
+}
+
+body {
+  background: #f0f2f5;
+  overflow: auto;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+
+/* Ant Design RTL fixes */
+.ant-table-wrapper .ant-table-pagination {
+  direction: rtl;
+}
+
+.ant-descriptions-item-label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Card hover effect */
+.ant-card-hoverable:hover {
+  transform: translateY(-2px);
+  transition: all 0.3s ease;
+}
+
+/* Smooth transitions */
+.ant-layout-content {
+  transition: all 0.2s ease;
+}
+
+/* Fix drawer direction */
+.ant-drawer-body {
+  direction: rtl;
+}

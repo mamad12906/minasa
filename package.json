@@ -1,0 +1,63 @@
+{
+  "name": "minasa",
+  "version": "1.0.0",
+  "description": "Customer & Invoice Management System",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "unset ELECTRON_RUN_AS_NODE && electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "package": "electron-builder --win",
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "start": "unset ELECTRON_RUN_AS_NODE && electron ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@ant-design/icons": "^6.1.1",
+    "antd": "^6.3.5",
+    "better-sqlite3": "^12.8.0",
+    "dayjs": "^1.11.20",
+    "electron-updater": "^6.8.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.2",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "electron": "^33.4.11",
+    "electron-builder": "^26.8.1",
+    "electron-vite": "^5.0.0",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.minasa.app",
+    "productName": "Minasa",
+    "win": {
+      "target": "nsis",
+      "icon": null
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "منصة",
+      "artifactName": "Minasa-Setup-${version}.${ext}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "mamad12906",
+      "repo": "minasa"
+    },
+    "files": [
+      "out/**/*",
+      "resources/**/*"
+    ]
+  }
+}
