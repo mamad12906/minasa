@@ -90,6 +90,7 @@ function serverGet(path: string, params?: Record<string, any>) {
 
 // ===== Local API (via IPC) =====
 const local = () => (window as any).__localApi
+const hasLocal = () => !!(window as any).__localApi
 
 // ===== Connection Check =====
 async function checkConnection(): Promise<boolean> {
@@ -131,10 +132,15 @@ setTimeout(() => checkConnection(), 2000)
 // ===== Hybrid API: try server, fallback to local =====
 
 async function hybridRead(serverFn: () => Promise<any>, localFn: () => Promise<any>) {
+  // Try server first
   if (IS_ONLINE && BASE_URL) {
     try { return await serverFn() } catch { IS_ONLINE = false }
   }
-  return localFn()
+  // Fallback to local
+  if (hasLocal()) {
+    try { return await localFn() } catch { /* local failed too */ }
+  }
+  return null
 }
 
 async function hybridWrite(
@@ -142,8 +148,11 @@ async function hybridWrite(
   localFn: () => Promise<any>,
   syncInfo?: { method: string; path: string; body?: any }
 ) {
-  // Always write locally first
-  const localResult = await localFn()
+  // Write locally first (if available)
+  let localResult = null
+  if (hasLocal()) {
+    try { localResult = await localFn() } catch { /* ignore local failure */ }
+  }
 
   // Try server
   if (IS_ONLINE && BASE_URL) {

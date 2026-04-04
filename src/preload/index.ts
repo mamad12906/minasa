@@ -1,70 +1,78 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+// Safe IPC invoke - returns null/error if handler not registered
+function safeInvoke(channel: string, ...args: any[]) {
+  return ipcRenderer.invoke(channel, ...args).catch((err: any) => {
+    console.warn(`IPC ${channel} not available:`, err.message)
+    return null
+  })
+}
+
 // Full IPC API for local SQLite operations
 const localApi = {
   customer: {
-    list: (params: any) => ipcRenderer.invoke('customer:list', params),
-    get: (id: number) => ipcRenderer.invoke('customer:get', id),
-    create: (input: any) => ipcRenderer.invoke('customer:create', input),
-    update: (id: number, input: any) => ipcRenderer.invoke('customer:update', id, input),
-    delete: (id: number) => ipcRenderer.invoke('customer:delete', id),
-    platforms: () => ipcRenderer.invoke('customer:platforms'),
-    categories: () => ipcRenderer.invoke('customer:categories'),
-    reminders: (customerId: number) => ipcRenderer.invoke('customer:reminders', customerId),
+    list: (params: any) => safeInvoke('customer:list', params),
+    get: (id: number) => safeInvoke('customer:get', id),
+    create: (input: any) => safeInvoke('customer:create', input),
+    update: (id: number, input: any) => safeInvoke('customer:update', id, input),
+    delete: (id: number) => safeInvoke('customer:delete', id),
+    platforms: () => safeInvoke('customer:platforms').then(r => r || []),
+    categories: () => safeInvoke('customer:categories').then(r => r || []),
+    reminders: (customerId: number) => safeInvoke('customer:reminders', customerId).then(r => r || []),
   },
   dashboard: {
-    stats: (userId?: number) => ipcRenderer.invoke('dashboard:stats', userId),
+    stats: (userId?: number) => safeInvoke('dashboard:stats', userId),
   },
   reminders: {
-    active: (userId?: number) => ipcRenderer.invoke('reminders:active', userId),
-    all: (userId?: number) => ipcRenderer.invoke('reminders:all', userId),
-    done: (id: number, handledBy: string, handleMethod: string) => ipcRenderer.invoke('reminders:done', id, handledBy, handleMethod),
-    postpone: (id: number, newDate: string, reason: string) => ipcRenderer.invoke('reminders:postpone', id, newDate, reason),
-    reremind: (id: number, newDate: string, reason: string) => ipcRenderer.invoke('reminders:reremind', id, newDate, reason),
-    delete: (id: number) => ipcRenderer.invoke('reminders:delete', id),
+    active: (userId?: number) => safeInvoke('reminders:active', userId).then(r => r || []),
+    all: (userId?: number) => safeInvoke('reminders:all', userId).then(r => r || []),
+    done: (id: number, handledBy: string, handleMethod: string) => safeInvoke('reminders:done', id, handledBy, handleMethod),
+    postpone: (id: number, newDate: string, reason: string) => safeInvoke('reminders:postpone', id, newDate, reason),
+    reremind: (id: number, newDate: string, reason: string) => safeInvoke('reminders:reremind', id, newDate, reason),
+    delete: (id: number) => safeInvoke('reminders:delete', id),
   },
   users: {
-    login: (username: string, password: string) => ipcRenderer.invoke('users:login', username, password),
-    list: () => ipcRenderer.invoke('users:list'),
+    login: (username: string, password: string) => safeInvoke('users:login', username, password),
+    list: () => safeInvoke('users:list').then(r => r || []),
     create: (username: string, password: string, displayName: string, role: string, permissions: string, platformName: string) =>
-      ipcRenderer.invoke('users:create', username, password, displayName, role, permissions, platformName),
+      safeInvoke('users:create', username, password, displayName, role, permissions, platformName),
     update: (id: number, displayName: string, password: string | null, permissions: string, platformName: string) =>
-      ipcRenderer.invoke('users:update', id, displayName, password, permissions, platformName),
-    delete: (id: number) => ipcRenderer.invoke('users:delete', id),
+      safeInvoke('users:update', id, displayName, password, permissions, platformName),
+    delete: (id: number) => safeInvoke('users:delete', id),
   },
   platforms: {
-    list: () => ipcRenderer.invoke('platforms:list'),
-    add: (name: string) => ipcRenderer.invoke('platforms:add', name),
-    delete: (id: number) => ipcRenderer.invoke('platforms:delete', id),
+    list: () => safeInvoke('platforms:list').then(r => r || []),
+    add: (name: string) => safeInvoke('platforms:add', name),
+    delete: (id: number) => safeInvoke('platforms:delete', id),
   },
   categories: {
-    list: () => ipcRenderer.invoke('categories:list'),
-    add: (name: string) => ipcRenderer.invoke('categories:add', name),
-    delete: (id: number) => ipcRenderer.invoke('categories:delete', id),
+    list: () => safeInvoke('categories:list').then(r => r || []),
+    add: (name: string) => safeInvoke('categories:add', name),
+    delete: (id: number) => safeInvoke('categories:delete', id),
   },
   transfer: {
-    customers: (ids: number[], targetPlatform: string) => ipcRenderer.invoke('customers:transfer', ids, targetPlatform),
+    customers: (ids: number[], targetPlatform: string) => safeInvoke('customers:transfer', ids, targetPlatform),
   },
   columns: {
-    list: (tableName?: string) => ipcRenderer.invoke('columns:list', tableName),
-    add: (input: any) => ipcRenderer.invoke('columns:add', input),
-    update: (id: number, displayName: string) => ipcRenderer.invoke('columns:update', id, displayName),
-    delete: (id: number) => ipcRenderer.invoke('columns:delete', id),
+    list: (tableName?: string) => safeInvoke('columns:list', tableName).then(r => r || []),
+    add: (input: any) => safeInvoke('columns:add', input),
+    update: (id: number, displayName: string) => safeInvoke('columns:update', id, displayName),
+    delete: (id: number) => safeInvoke('columns:delete', id),
   },
   excel: {
-    selectFile: () => ipcRenderer.invoke('excel:selectFile'),
-    readHeaders: (filePath: string) => ipcRenderer.invoke('excel:readHeaders', filePath),
-    importData: (filePath: string, mapping: any) => ipcRenderer.invoke('excel:import', filePath, mapping),
+    selectFile: () => safeInvoke('excel:selectFile'),
+    readHeaders: (filePath: string) => safeInvoke('excel:readHeaders', filePath).then(r => r || []),
+    importData: (filePath: string, mapping: any) => safeInvoke('excel:import', filePath, mapping),
   },
   backup: {
-    database: () => ipcRenderer.invoke('backup:database'),
-    restore: () => ipcRenderer.invoke('backup:restore'),
-    excelAll: () => ipcRenderer.invoke('backup:excel-all'),
-    excelUser: (userId: number, userName: string) => ipcRenderer.invoke('backup:excel-user', userId, userName),
-    autoSetup: (dir: string, hours: number) => ipcRenderer.invoke('backup:auto-setup', dir, hours),
-    autoStop: () => ipcRenderer.invoke('backup:auto-stop'),
-    autoGet: () => ipcRenderer.invoke('backup:auto-get'),
-    selectDir: () => ipcRenderer.invoke('backup:select-dir'),
+    database: () => safeInvoke('backup:database'),
+    restore: () => safeInvoke('backup:restore'),
+    excelAll: () => safeInvoke('backup:excel-all'),
+    excelUser: (userId: number, userName: string) => safeInvoke('backup:excel-user', userId, userName),
+    autoSetup: (dir: string, hours: number) => safeInvoke('backup:auto-setup', dir, hours),
+    autoStop: () => safeInvoke('backup:auto-stop'),
+    autoGet: () => safeInvoke('backup:auto-get').then(r => r || { dir: '', hours: 0 }),
+    selectDir: () => safeInvoke('backup:select-dir'),
   },
 }
 

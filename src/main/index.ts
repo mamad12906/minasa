@@ -1,7 +1,6 @@
 import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron'
 import path from 'path'
 import { autoUpdater } from 'electron-updater'
-import { registerAllIPC } from './ipc/handlers'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -109,10 +108,28 @@ function setupAutoUpdater() {
   }, 10000)
 }
 
+// Try to activate local SQLite IPC (may fail on some systems)
+function tryRegisterLocalIPC() {
+  try {
+    const { registerAllIPC } = require('./ipc/handlers')
+    registerAllIPC()
+    console.log('Local SQLite IPC registered successfully')
+    // Tell renderer that local DB is available
+    if (mainWindow) {
+      mainWindow.webContents.on('did-finish-load', () => {
+        mainWindow?.webContents.send('local-db-ready', true)
+      })
+    }
+  } catch (err) {
+    console.error('Failed to register local IPC (SQLite not available):', err)
+    // App will work in online-only mode
+  }
+}
+
 app.whenReady().then(() => {
   registerFileIPC()
-  registerAllIPC()   // Activate local SQLite IPC
   createWindow()
+  tryRegisterLocalIPC()
   setupAutoUpdater()
 
   app.on('activate', () => {
