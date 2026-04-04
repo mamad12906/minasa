@@ -76,8 +76,18 @@ const localApi = {
   },
 }
 
+// Sync operations
+const syncApi = {
+  pullCustomers: (data: any[]) => safeInvoke('sync:pull-customers', data),
+  pullUsers: (data: any[]) => safeInvoke('sync:pull-users', data),
+  pullPlatforms: (data: any[]) => safeInvoke('sync:pull-platforms', data),
+  pullCategories: (data: any[]) => safeInvoke('sync:pull-categories', data),
+  pullReminders: (data: any[]) => safeInvoke('sync:pull-reminders', data),
+}
+
 // Expose local IPC API
 contextBridge.exposeInMainWorld('__localApi', localApi)
+contextBridge.exposeInMainWorld('__syncApi', syncApi)
 
 // Legacy IPC (for backward compat)
 contextBridge.exposeInMainWorld('__ipc', {

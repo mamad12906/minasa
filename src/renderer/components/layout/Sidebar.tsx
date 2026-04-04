@@ -8,7 +8,7 @@ import {
   WifiOutlined, DisconnectOutlined, SyncOutlined
 } from '@ant-design/icons'
 import { useAuth, useTheme } from '../../App'
-import { isOnline, getSyncQueueCount, processSyncQueue } from '../../api/http'
+import { isOnline, getSyncQueueCount, processSyncQueue, pullFromServer, getLastSyncTime, isSyncing } from '../../api/http'
 
 const { Sider } = Layout
 const updater = (window as any).__updater
@@ -44,12 +44,15 @@ export default function Sidebar() {
 
   const handleManualSync = async () => {
     setSyncing(true)
-    const result = await processSyncQueue()
+    // First push pending changes
+    const pushResult = await processSyncQueue()
+    if (pushResult.synced > 0) message.success(`تم رفع ${pushResult.synced} عملية`)
+    // Then pull fresh data from server
+    const pullResult = await pullFromServer()
     setSyncing(false)
     setSyncCount(getSyncQueueCount())
-    if (result.synced > 0) message.success(`تم مزامنة ${result.synced} عملية`)
-    if (result.failed > 0) message.warning(`فشل مزامنة ${result.failed} عملية`)
-    if (result.synced === 0 && result.failed === 0) message.info('لا توجد عمليات للمزامنة')
+    if (pullResult.success) message.success(pullResult.details)
+    else if (pullResult.details) message.warning(pullResult.details)
   }
 
   useEffect(() => {
@@ -250,20 +253,21 @@ export default function Sidebar() {
         )}
 
         {/* Connection Status */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          marginBottom: 8, fontSize: 11, color: online ? 'rgba(45,164,78,0.9)' : 'rgba(207,34,46,0.9)'
-        }}>
-          {online ? <WifiOutlined /> : <DisconnectOutlined />}
-          <span>{online ? 'متصل بالسيرفر' : 'غير متصل - وضع محلي'}</span>
-          {syncCount > 0 && (
-            <Button type="text" size="small" icon={<SyncOutlined spin={syncing} />}
-              onClick={handleManualSync} disabled={syncing || !online}
-              style={{ color: '#D29922', fontSize: 11, padding: '0 4px', height: 'auto' }}
-              title={`${syncCount} عملية بانتظار المزامنة`}>
-              {syncCount}
-            </Button>
-          )}
+        <div style={{ marginBottom: 8, textAlign: 'center' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            fontSize: 11, color: online ? 'rgba(45,164,78,0.9)' : 'rgba(207,34,46,0.9)',
+            marginBottom: 4
+          }}>
+            {online ? <WifiOutlined /> : <DisconnectOutlined />}
+            <span>{online ? 'متصل' : 'غير متصل'}</span>
+            {syncCount > 0 && <Tag color="warning" style={{ fontSize: 10, padding: '0 4px', margin: 0 }}>{syncCount} معلّق</Tag>}
+          </div>
+          <Button type="text" size="small" icon={<SyncOutlined spin={syncing} />}
+            onClick={handleManualSync} disabled={syncing}
+            style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, padding: '0 6px', height: 'auto' }}>
+            {syncing ? 'جاري المزامنة...' : 'مزامنة'}
+          </Button>
         </div>
 
         <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, marginBottom: 8, textAlign: 'center' }}>

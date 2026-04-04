@@ -129,6 +129,95 @@ setInterval(async () => {
 // Initial check
 setTimeout(() => checkConnection(), 2000)
 
+// ===== Full Sync: Pull server data to local DB =====
+let IS_SYNCING = false
+export function isSyncing() { return IS_SYNCING }
+
+export async function pullFromServer(): Promise<{ success: boolean; details: string }> {
+  if (!IS_ONLINE || !BASE_URL || !hasLocal()) return { success: false, details: 'غير متصل أو القاعدة المحلية غير متوفرة' }
+  if (IS_SYNCING) return { success: false, details: 'المزامنة قيد التنفيذ' }
+
+  const sync = (window as any).__syncApi
+  if (!sync) return { success: false, details: 'واجهة المزامنة غير متوفرة' }
+
+  IS_SYNCING = true
+  window.dispatchEvent(new CustomEvent('sync-status', { detail: 'syncing' }))
+
+  try {
+    const results: string[] = []
+
+    // Pull users
+    try {
+      const users = await serverGet('/api/users')
+      if (Array.isArray(users) && users.length > 0) {
+        await sync.pullUsers(users)
+        results.push(`${users.length} مستخدم`)
+      }
+    } catch { /* skip */ }
+
+    // Pull platforms
+    try {
+      const platforms = await serverGet('/api/platforms')
+      if (Array.isArray(platforms) && platforms.length > 0) {
+        await sync.pullPlatforms(platforms)
+        results.push(`${platforms.length} منصة`)
+      }
+    } catch { /* skip */ }
+
+    // Pull categories
+    try {
+      const categories = await serverGet('/api/categories')
+      if (Array.isArray(categories) && categories.length > 0) {
+        await sync.pullCategories(categories)
+        results.push(`${categories.length} صنف`)
+      }
+    } catch { /* skip */ }
+
+    // Pull customers (paginated - get all)
+    try {
+      let page = 1
+      let totalCustomers = 0
+      while (true) {
+        const res = await serverGet('/api/customers', { page, pageSize: 500 })
+        if (!res || !res.data || res.data.length === 0) break
+        await sync.pullCustomers(res.data)
+        totalCustomers += res.data.length
+        if (totalCustomers >= (res.total || 0)) break
+        page++
+      }
+      if (totalCustomers > 0) results.push(`${totalCustomers} زبون`)
+    } catch { /* skip */ }
+
+    // Pull reminders
+    try {
+      const reminders = await serverGet('/api/reminders/all')
+      if (Array.isArray(reminders) && reminders.length > 0) {
+        await sync.pullReminders(reminders)
+        results.push(`${reminders.length} تذكير`)
+      }
+    } catch { /* skip */ }
+
+    // Save sync timestamp
+    localStorage.setItem('minasa_last_sync', new Date().toISOString())
+
+    IS_SYNCING = false
+    window.dispatchEvent(new CustomEvent('sync-status', { detail: 'done' }))
+
+    if (results.length > 0) {
+      return { success: true, details: `تم مزامنة: ${results.join('، ')}` }
+    }
+    return { success: true, details: 'لا توجد بيانات جديدة' }
+  } catch (err: any) {
+    IS_SYNCING = false
+    window.dispatchEvent(new CustomEvent('sync-status', { detail: 'error' }))
+    return { success: false, details: `خطأ: ${err.message}` }
+  }
+}
+
+export function getLastSyncTime(): string {
+  return localStorage.getItem('minasa_last_sync') || ''
+}
+
 // ===== Hybrid API: try server, fallback to local =====
 
 async function hybridRead(serverFn: () => Promise<any>, localFn: () => Promise<any>) {
@@ -256,6 +345,8 @@ export const api = {
           const res = await serverRequest('POST', '/api/auth/login', { username, password })
           if (res.token) setToken(res.token)
           IS_ONLINE = true
+          // Auto-sync after successful server login
+          setTimeout(() => pullFromServer(), 1000)
           return res.user || null
         } catch { IS_ONLINE = false }
       }
