@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Badge, Popover, Button, Empty, Tag, Progress, Modal } from 'antd'
+import { Layout, Menu, Badge, Popover, Button, Empty, Tag, Progress, Modal, message } from 'antd'
 import {
   DashboardOutlined, UserOutlined, UploadOutlined,
   CrownOutlined, BellOutlined, LogoutOutlined, SaveOutlined,
-  CloudDownloadOutlined, MoonOutlined, SunOutlined
+  CloudDownloadOutlined, MoonOutlined, SunOutlined,
+  WifiOutlined, DisconnectOutlined, SyncOutlined
 } from '@ant-design/icons'
 import { useAuth, useTheme } from '../../App'
+import { isOnline, getSyncQueueCount, processSyncQueue } from '../../api/http'
 
 const { Sider } = Layout
 const updater = (window as any).__updater
@@ -22,8 +24,33 @@ export default function Sidebar() {
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null)
   const [updateReady, setUpdateReady] = useState(false)
 
+  const [online, setOnline] = useState(isOnline())
+  const [syncCount, setSyncCount] = useState(getSyncQueueCount())
+  const [syncing, setSyncing] = useState(false)
   const isAdmin = user?.role === 'admin'
   const userId = (!isAdmin && user?.id) ? user.id : undefined
+
+  // Listen for connection and sync changes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setOnline(isOnline())
+      setSyncCount(getSyncQueueCount())
+    }, 3000)
+    const onSync = (e: any) => { setSyncCount(getSyncQueueCount()) }
+    window.addEventListener('sync-queue-changed', onSync)
+    window.addEventListener('sync-completed', onSync)
+    return () => { clearInterval(interval); window.removeEventListener('sync-queue-changed', onSync); window.removeEventListener('sync-completed', onSync) }
+  }, [])
+
+  const handleManualSync = async () => {
+    setSyncing(true)
+    const result = await processSyncQueue()
+    setSyncing(false)
+    setSyncCount(getSyncQueueCount())
+    if (result.synced > 0) message.success(`تم مزامنة ${result.synced} عملية`)
+    if (result.failed > 0) message.warning(`فشل مزامنة ${result.failed} عملية`)
+    if (result.synced === 0 && result.failed === 0) message.info('لا توجد عمليات للمزامنة')
+  }
 
   useEffect(() => {
     if (!updater) return
@@ -221,6 +248,23 @@ export default function Sidebar() {
             </Button>
           </div>
         )}
+
+        {/* Connection Status */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          marginBottom: 8, fontSize: 11, color: online ? 'rgba(45,164,78,0.9)' : 'rgba(207,34,46,0.9)'
+        }}>
+          {online ? <WifiOutlined /> : <DisconnectOutlined />}
+          <span>{online ? 'متصل بالسيرفر' : 'غير متصل - وضع محلي'}</span>
+          {syncCount > 0 && (
+            <Button type="text" size="small" icon={<SyncOutlined spin={syncing} />}
+              onClick={handleManualSync} disabled={syncing || !online}
+              style={{ color: '#D29922', fontSize: 11, padding: '0 4px', height: 'auto' }}
+              title={`${syncCount} عملية بانتظار المزامنة`}>
+              {syncCount}
+            </Button>
+          )}
+        </div>
 
         <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, marginBottom: 8, textAlign: 'center' }}>
           {user?.role === 'admin' ? <CrownOutlined style={{ marginLeft: 4, color: '#D29922' }} /> : <UserOutlined style={{ marginLeft: 4 }} />}

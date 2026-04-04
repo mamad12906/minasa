@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron'
 import path from 'path'
 import { autoUpdater } from 'electron-updater'
+import { registerAllIPC } from './ipc/handlers'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -87,7 +88,6 @@ function setupAutoUpdater() {
     console.error('Auto-updater error:', err)
   })
 
-  // IPC handlers for update actions
   ipcMain.handle('updater:check', () => {
     autoUpdater.checkForUpdates().catch(() => {})
   })
@@ -100,12 +100,10 @@ function setupAutoUpdater() {
     autoUpdater.quitAndInstall()
   })
 
-  // Check for updates every 30 minutes
   setInterval(() => {
     autoUpdater.checkForUpdates().catch(() => {})
   }, 30 * 60 * 1000)
 
-  // Check on startup (after 10 seconds)
   setTimeout(() => {
     autoUpdater.checkForUpdates().catch(() => {})
   }, 10000)
@@ -113,6 +111,7 @@ function setupAutoUpdater() {
 
 app.whenReady().then(() => {
   registerFileIPC()
+  registerAllIPC()   // Activate local SQLite IPC
   createWindow()
   setupAutoUpdater()
 
