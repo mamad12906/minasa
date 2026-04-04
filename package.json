@@ -4,12 +4,12 @@
   "description": "Customer & Invoice Management System",
   "main": "./out/main/index.js",
   "scripts": {
-    "dev": "unset ELECTRON_RUN_AS_NODE && electron-vite dev",
+    "dev": "set ELECTRON_RUN_AS_NODE= && electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "package": "electron-builder --win",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
-    "start": "unset ELECTRON_RUN_AS_NODE && electron ."
+    "start": "set ELECTRON_RUN_AS_NODE= && electron ."
   },
   "keywords": [],
   "author": "",

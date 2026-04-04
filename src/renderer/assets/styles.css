@@ -1,3 +1,112 @@
+/* ===== Design Tokens - Light Theme ===== */
+:root {
+  /* Primary - Deep Teal (professional, calm, trust) */
+  --primary: #1B6B93;
+  --primary-hover: #155A7D;
+  --primary-light: #E8F4F8;
+  --primary-shadow: rgba(27, 107, 147, 0.12);
+
+  /* Accent */
+  --accent: #E8A838;
+
+  /* Surfaces */
+  --bg-app: #F6F8FA;
+  --bg-card: #ffffff;
+  --bg-card-hover: #F0F4F7;
+  --bg-elevated: #ffffff;
+  --bg-input: #ffffff;
+
+  /* Text */
+  --text-primary: #1A2332;
+  --text-secondary: #5C6B7A;
+  --text-muted: #94A3B8;
+  --text-inverse: #ffffff;
+
+  /* Borders */
+  --border-color: #E2E8F0;
+  --border-light: #EDF2F7;
+
+  /* Shadows - very subtle */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 3px 12px rgba(0, 0, 0, 0.08);
+
+  /* Status - slightly muted */
+  --success: #2DA44E;
+  --success-bg: #F0FFF4;
+  --success-border: #B7E4C7;
+  --warning: #D29922;
+  --warning-bg: #FFFBEB;
+  --warning-border: #F0D78C;
+  --error: #CF222E;
+  --error-bg: #FFF5F5;
+  --error-border: #F4B4B8;
+  --info: #1B6B93;
+  --info-bg: #E8F4F8;
+  --info-border: #A8D4E6;
+
+  /* Sidebar */
+  --sidebar-bg: #0F1923;
+
+  /* Misc */
+  --bar-track: #EDF2F7;
+  --divider: #EDF2F7;
+  --scrollbar-thumb: #CBD5E1;
+  --scrollbar-hover: #94A3B8;
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+}
+
+/* ===== Design Tokens - Dark Theme ===== */
+[data-theme="dark"] {
+  --primary: #2D99C8;
+  --primary-hover: #1B6B93;
+  --primary-light: rgba(27, 107, 147, 0.15);
+  --primary-shadow: rgba(45, 153, 200, 0.15);
+
+  --bg-app: #0D1117;
+  --bg-card: #161B22;
+  --bg-card-hover: #1C2333;
+  --bg-elevated: #1C2333;
+  --bg-input: #161B22;
+
+  --text-primary: #E6EDF3;
+  --text-secondary: #8B949E;
+  --text-muted: #5C6B7A;
+  --text-inverse: #ffffff;
+
+  --border-color: #21262D;
+  --border-light: #1C2333;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.15);
+  --shadow-card-hover: 0 3px 12px rgba(0, 0, 0, 0.25);
+
+  --success-bg: rgba(45, 164, 78, 0.1);
+  --success-border: rgba(45, 164, 78, 0.3);
+  --warning-bg: rgba(210, 153, 34, 0.1);
+  --warning-border: rgba(210, 153, 34, 0.3);
+  --error-bg: rgba(207, 34, 46, 0.1);
+  --error-border: rgba(207, 34, 46, 0.3);
+  --info-bg: rgba(27, 107, 147, 0.1);
+  --info-border: rgba(27, 107, 147, 0.3);
+
+  --bar-track: #21262D;
+  --divider: #21262D;
+  --scrollbar-thumb: #30363D;
+  --scrollbar-hover: #484F58;
+
+  --sidebar-bg: #010409;
+}
+
+/* ===== Base Reset ===== */
 * {
   margin: 0;
   padding: 0;
@@ -11,14 +120,16 @@ html, body, #root {
 }
 
 body {
-  background: #f0f2f5;
+  background: var(--bg-app);
+  color: var(--text-primary);
   overflow: auto;
+  transition: background var(--transition-normal), color var(--transition-normal);
 }
 
-/* Custom scrollbar */
+/* ===== Scrollbar ===== */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -26,15 +137,15 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d9d9d9;
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #bfbfbf;
+  background: var(--scrollbar-hover);
 }
 
-/* Ant Design RTL fixes */
+/* ===== Ant Design RTL Fixes ===== */
 .ant-table-wrapper .ant-table-pagination {
   direction: rtl;
 }
@@ -44,18 +155,138 @@ body {
   white-space: nowrap;
 }
 
-/* Card hover effect */
-.ant-card-hoverable:hover {
-  transform: translateY(-2px);
-  transition: all 0.3s ease;
-}
-
-/* Smooth transitions */
-.ant-layout-content {
-  transition: all 0.2s ease;
-}
-
-/* Fix drawer direction */
 .ant-drawer-body {
   direction: rtl;
+}
+
+.ant-layout-content {
+  transition: all var(--transition-fast);
+}
+
+/* ===== Page Header (flat, clean) ===== */
+.page-header {
+  padding: 8px 0 24px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.page-header h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.page-header p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* ===== Cards ===== */
+.app-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: 24px 28px;
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border-light);
+  transition: box-shadow var(--transition-normal);
+}
+
+.app-card:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* ===== Stat Cards ===== */
+.stat-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: 22px 24px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid var(--border-light);
+  transition: box-shadow var(--transition-normal);
+}
+
+.stat-card:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+.stat-card:hover .stat-icon {
+  transform: scale(1.05);
+}
+
+/* ===== Hover Cards ===== */
+.hover-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: 24px 28px;
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border-light);
+  transition: box-shadow var(--transition-normal);
+}
+
+.hover-card:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* ===== Field Cards (forms) ===== */
+.field-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: 24px 28px;
+  box-shadow: var(--shadow-card);
+  margin-bottom: 16px;
+  border: 1px solid var(--border-light);
+  transition: box-shadow var(--transition-normal);
+}
+
+.field-card:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* ===== Backup Cards ===== */
+.backup-card {
+  transition: box-shadow var(--transition-normal) !important;
+}
+
+.backup-card:hover {
+  box-shadow: var(--shadow-card-hover) !important;
+}
+
+.backup-card:hover .backup-icon {
+  transform: scale(1.05);
+}
+
+.backup-icon {
+  transition: transform var(--transition-normal) !important;
+}
+
+/* ===== Save Button ===== */
+.save-btn {
+  transition: box-shadow var(--transition-normal), opacity var(--transition-normal) !important;
+}
+
+.save-btn:hover {
+  opacity: 0.9 !important;
+}
+
+/* ===== Bar Animations ===== */
+.bar-fill {
+  animation: barGrow 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes barGrow {
+  from { width: 0 !important; }
+}
+
+/* ===== Reduced Motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

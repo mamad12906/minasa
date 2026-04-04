@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Card, Form, Input, Select, InputNumber, DatePicker, Checkbox, Button, Divider, message, Row, Col } from 'antd'
+import { Form, Input, Select, InputNumber, DatePicker, Checkbox, Button, message, Row, Col } from 'antd'
 import {
   UserAddOutlined, SaveOutlined, ArrowRightOutlined, BellOutlined,
-  PhoneOutlined, IdcardOutlined, BankOutlined, TagOutlined,
+  PhoneOutlined, IdcardOutlined, BankOutlined,
   FileTextOutlined, CalendarOutlined, LinkOutlined
 } from '@ant-design/icons'
+import dayjs from 'dayjs'
 import { useAuth } from '../../App'
 
 export default function AddCustomer() {
@@ -15,6 +16,8 @@ export default function AddCustomer() {
   const [form] = Form.useForm()
   const hasReminder = Form.useWatch('has_reminder', form)
   const linkToPlatform = Form.useWatch('link_to_platform', form)
+  const monthsCount = Form.useWatch('months_count', form)
+  const reminderBefore = Form.useWatch('reminder_before', form)
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([])
   const [platforms, setPlatforms] = useState<{ id: number; name: string }[]>([])
   const [saving, setSaving] = useState(false)
@@ -24,27 +27,42 @@ export default function AddCustomer() {
     window.api.platforms.list().then(setPlatforms).catch(() => {})
   }, [])
 
+  // Compute end date and reminder date
+  const endDate = monthsCount && monthsCount > 0
+    ? dayjs().add(monthsCount, 'month')
+    : null
+  const autoReminderDate = endDate && reminderBefore && reminderBefore > 0
+    ? endDate.subtract(reminderBefore, 'month')
+    : null
+
   const handleSave = async () => {
     const values = await form.validateFields()
     setSaving(true)
-
     if (Array.isArray(values.platform_name)) values.platform_name = values.platform_name[0] || ''
     if (Array.isArray(values.category)) values.category = values.category[0] || ''
-    if (values.reminder_date) values.reminder_date = values.reminder_date.format('YYYY-MM-DD')
-    if (!values.has_reminder) { values.reminder_date = ''; values.reminder_text = '' }
-    delete values.has_reminder
 
-    // Platform binding
-    if (!values.link_to_platform) {
-      values.platform_name = ''
-    } else if (!isAdmin && user?.platform_name) {
-      values.platform_name = user.platform_name
+    // Auto reminder from months_count
+    if (values.months_count && values.months_count > 0 && values.reminder_before && values.reminder_before > 0) {
+      const end = dayjs().add(values.months_count, 'month')
+      const remind = end.subtract(values.reminder_before, 'month')
+      values.reminder_date = remind.format('YYYY-MM-DD')
+      values.reminder_text = `تذكير تلقائي - انتهاء المدة ${end.format('YYYY-MM-DD')}`
     }
+    delete values.reminder_before
+
+    // Manual reminder
+    if (values.has_reminder && values.manual_reminder_date) {
+      values.reminder_date = values.manual_reminder_date.format('YYYY-MM-DD')
+      values.reminder_text = values.manual_reminder_text || 'تذكير يدوي'
+    }
+    delete values.has_reminder
+    delete values.manual_reminder_date
+    delete values.manual_reminder_text
+
+    if (!values.link_to_platform) { values.platform_name = '' }
+    else if (!isAdmin && user?.platform_name) { values.platform_name = user.platform_name }
     delete values.link_to_platform
-
-    // Set user_id
     values.user_id = user?.id || 0
-
     await window.api.customer.create(values)
     message.success('تم إضافة الزبون بنجاح!')
     setSaving(false)
@@ -52,20 +70,14 @@ export default function AddCustomer() {
   }
 
   const fieldCard = (icon: React.ReactNode, color: string, title: string, children: React.ReactNode) => (
-    <div className="field-card" style={{
-      background: '#fff', borderRadius: 14, padding: '20px 24px',
-      boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
-      borderRight: `4px solid ${color}`,
-      transition: 'all 0.35s cubic-bezier(.4,0,.2,1)',
-      marginBottom: 16
-    }}>
+    <div className="field-card" style={{ borderTop: `3px solid ${color}` }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
         <div style={{
-          width: 36, height: 36, borderRadius: 10, background: color,
+          width: 32, height: 32, borderRadius: 8, background: color,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#fff', fontSize: 18, boxShadow: `0 4px 12px ${color}40`
+          color: '#fff', fontSize: 16
         }}>{icon}</div>
-        <span style={{ fontWeight: 'bold', fontSize: 15, color: '#333' }}>{title}</span>
+        <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{title}</span>
       </div>
       {children}
     </div>
@@ -73,28 +85,19 @@ export default function AddCustomer() {
 
   return (
     <div>
-      <div className="add-header" style={{
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        borderRadius: 16, padding: '24px 32px', marginBottom: 24, color: '#fff',
-        boxShadow: '0 8px 32px rgba(102,126,234,0.3)',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-      }}>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ margin: 0, color: '#fff', fontSize: 24 }}>
-            <UserAddOutlined style={{ marginLeft: 10 }} />إضافة زبون جديد
-          </h2>
-          <p style={{ margin: '4px 0 0', opacity: 0.8, fontSize: 13 }}>أدخل بيانات الزبون الجديد</p>
+          <h2><UserAddOutlined style={{ marginLeft: 8 }} />إضافة زبون جديد</h2>
+          <p>أدخل بيانات الزبون الجديد</p>
         </div>
-        <Button ghost icon={<ArrowRightOutlined />} onClick={() => navigate('/customers')}
-          style={{ borderRadius: 10, color: '#fff', borderColor: 'rgba(255,255,255,0.5)' }}>
-          رجوع للزبائن
-        </Button>
+        <Button icon={<ArrowRightOutlined />} onClick={() => navigate('/customers')}
+          style={{ borderRadius: 8 }}>رجوع للزبائن</Button>
       </div>
 
       <Form form={form} layout="vertical" size="large">
         <Row gutter={20}>
           <Col xs={24} lg={12}>
-            {fieldCard(<IdcardOutlined />, '#667eea', 'المعلومات الأساسية', (
+            {fieldCard(<IdcardOutlined />, '#1B6B93', 'المعلومات الأساسية', (
               <>
                 <Form.Item name="full_name" label="اسم الزبون الرباعي"
                   rules={[{ required: true, message: 'يرجى إدخال الاسم' }]}>
@@ -117,16 +120,13 @@ export default function AddCustomer() {
                 </Row>
               </>
             ))}
-
-            {fieldCard(<BankOutlined />, '#43e97b', 'التصنيف والجهة', (
+            {fieldCard(<BankOutlined />, '#2DA44E', 'التصنيف والجهة', (
               <>
-                {/* Platform binding checkbox */}
                 <Form.Item name="link_to_platform" valuePropName="checked" style={{ marginBottom: 8 }}>
                   <Checkbox><LinkOutlined /> ربط الزبون بمنصة</Checkbox>
                 </Form.Item>
                 {linkToPlatform && (
-                  <Form.Item name="platform_name" label="اسم المنصة"
-                    rules={[{ required: true, message: 'اختر المنصة' }]}>
+                  <Form.Item name="platform_name" label="اسم المنصة" rules={[{ required: true, message: 'اختر المنصة' }]}>
                     <Select allowClear placeholder="اختر المنصة">
                       {platforms.map(p => <Select.Option key={p.id} value={p.name}>{p.name}</Select.Option>)}
                     </Select>
@@ -142,44 +142,59 @@ export default function AddCustomer() {
               </>
             ))}
           </Col>
-
           <Col xs={24} lg={12}>
-            {fieldCard(<CalendarOutlined />, '#f5576c', 'المدة والحالة', (
+            {fieldCard(<CalendarOutlined />, '#CF222E', 'المدة والتذكير التلقائي', (
               <>
                 <Form.Item name="months_count" label="عدد الأشهر">
-                  <InputNumber min={0} placeholder="مثال: 18، 36، 10..." style={{ width: '100%' }}
-                    addonAfter="شهر" />
+                  <InputNumber min={1} placeholder="مثال: 10، 18، 36..." style={{ width: '100%' }} addonAfter="شهر" />
                 </Form.Item>
-                <div style={{ fontSize: 12, color: '#999', background: '#fff1f0', padding: '8px 12px', borderRadius: 8, border: '1px solid #ffa39e', marginBottom: 12 }}>
-                  💡 سيتم إنشاء تذكير تلقائي قبل شهرين من انتهاء المدة (محسوبة من تاريخ الإضافة)
-                </div>
+                {monthsCount && monthsCount > 0 && (
+                  <>
+                    <div style={{
+                      fontSize: 13, color: 'var(--text-primary)',
+                      background: 'var(--info-bg)', padding: '10px 14px', borderRadius: 8,
+                      border: '1px solid var(--info-border)', marginBottom: 12
+                    }}>
+                      <div>تاريخ اليوم: <strong>{dayjs().format('YYYY-MM-DD')}</strong></div>
+                      <div>تاريخ الانتهاء: <strong style={{ color: 'var(--error)' }}>{endDate?.format('YYYY-MM-DD')}</strong></div>
+                    </div>
+                    <Form.Item name="reminder_before" label="تذكير قبل الانتهاء بـ">
+                      <InputNumber min={1} max={monthsCount - 1} placeholder="مثال: 2" style={{ width: '100%' }} addonAfter="شهر" />
+                    </Form.Item>
+                    {autoReminderDate && (
+                      <div style={{
+                        fontSize: 13, color: 'var(--text-primary)',
+                        background: 'var(--success-bg)', padding: '10px 14px', borderRadius: 8,
+                        border: '1px solid var(--success-border)', marginBottom: 12
+                      }}>
+                        تاريخ التذكير التلقائي: <strong style={{ color: 'var(--success)' }}>{autoReminderDate.format('YYYY-MM-DD')}</strong>
+                      </div>
+                    )}
+                  </>
+                )}
                 <Form.Item name="status_note" label="الحالة">
                   <Input placeholder="مثال: تذبذب شمول، قيد المراجعة..." />
                 </Form.Item>
               </>
             ))}
-
-            {fieldCard(<BellOutlined />, '#faad14', 'تذكير إضافي', (
+            {fieldCard(<BellOutlined />, '#D29922', 'تذكير يدوي إضافي', (
               <>
                 <Form.Item name="has_reminder" valuePropName="checked">
                   <Checkbox>تفعيل تذكير يدوي بتاريخ محدد</Checkbox>
                 </Form.Item>
                 {hasReminder && (
                   <>
-                    <Form.Item name="reminder_date" label="تاريخ التذكير"
-                      rules={[{ required: true, message: 'اختر التاريخ' }]}>
+                    <Form.Item name="manual_reminder_date" label="تاريخ التذكير" rules={[{ required: true, message: 'اختر التاريخ' }]}>
                       <DatePicker style={{ width: '100%' }} placeholder="اختر تاريخ التذكير" />
                     </Form.Item>
-                    <Form.Item name="reminder_text" label="نص التذكير"
-                      rules={[{ required: true, message: 'اكتب نص التذكير' }]}>
+                    <Form.Item name="manual_reminder_text" label="نص التذكير" rules={[{ required: true, message: 'اكتب نص التذكير' }]}>
                       <Input placeholder="مثال: تم شموله، متابعة الطلب..." />
                     </Form.Item>
                   </>
                 )}
               </>
             ))}
-
-            {fieldCard(<FileTextOutlined />, '#4facfe', 'ملاحظات', (
+            {fieldCard(<FileTextOutlined />, '#1B6B93', 'ملاحظات', (
               <Form.Item name="notes" label="ملاحظات">
                 <Input.TextArea rows={3} placeholder="ملاحظات إضافية عن الزبون..." />
               </Form.Item>
@@ -187,24 +202,14 @@ export default function AddCustomer() {
           </Col>
         </Row>
 
-        <div style={{ textAlign: 'center', marginTop: 8 }}>
+        <div style={{ textAlign: 'center', marginTop: 12 }}>
           <Button type="primary" size="large" icon={<SaveOutlined />}
             onClick={handleSave} loading={saving}
-            style={{
-              borderRadius: 12, minWidth: 250, height: 50, fontSize: 18,
-              background: 'linear-gradient(135deg, #667eea, #764ba2)',
-              border: 'none', boxShadow: '0 8px 24px rgba(102,126,234,0.4)'
-            }} className="save-btn">
+            style={{ borderRadius: 10, minWidth: 220, height: 48, fontSize: 16, fontWeight: 600 }}>
             حفظ الزبون
           </Button>
         </div>
       </Form>
-
-      <style>{`
-        .field-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.1) !important; }
-        .save-btn:hover { transform: translateY(-2px) !important; box-shadow: 0 12px 32px rgba(102,126,234,0.5) !important; }
-        .add-header:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(102,126,234,0.4) !important; }
-      `}</style>
     </div>
   )
 }

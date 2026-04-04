@@ -2,7 +2,7 @@ import React, { useState, createContext, useContext, useEffect } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ConfigProvider, App as AntApp } from 'antd'
 import arEG from 'antd/locale/ar_EG'
-import { theme } from './theme/antd-theme'
+import { lightTheme, darkTheme } from './theme/antd-theme'
 import { api, clearToken, getToken } from './api/http'
 import AppLayout from './components/layout/AppLayout'
 import Dashboard from './components/dashboard/StatCards'
@@ -33,14 +33,32 @@ interface AuthCtx {
   can: (section: string) => boolean
 }
 
+interface ThemeCtx {
+  isDark: boolean
+  toggle: () => void
+}
+
 export const AuthContext = createContext<AuthCtx>({
   user: null, login: () => {}, logout: () => {}, can: () => true
 })
 
+export const ThemeContext = createContext<ThemeCtx>({
+  isDark: false, toggle: () => {}
+})
+
 export const useAuth = () => useContext(AuthContext)
+export const useTheme = () => useContext(ThemeContext)
 
 export default function App() {
   const [user, setUser] = useState<UserData | null>(null)
+  const [isDark, setIsDark] = useState(() => {
+    return localStorage.getItem('theme') === 'dark'
+  })
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+    localStorage.setItem('theme', isDark ? 'dark' : 'light')
+  }, [isDark])
 
   const login = (u: UserData) => setUser(u)
   const logout = () => { clearToken(); setUser(null) }
@@ -49,30 +67,33 @@ export default function App() {
     if (user.role === 'admin') return true
     return user.permissions[section] !== false
   }
+  const toggleTheme = () => setIsDark(prev => !prev)
 
   return (
-    <ConfigProvider direction="rtl" locale={arEG} theme={theme}>
+    <ConfigProvider direction="rtl" locale={arEG} theme={isDark ? darkTheme : lightTheme}>
       <AntApp>
-        <AuthContext.Provider value={{ user, login, logout, can }}>
-          <HashRouter>
-            {!user ? (
-              <LoginPage />
-            ) : (
-              <Routes>
-                <Route path="/" element={<AppLayout />}>
-                  <Route index element={<Dashboard />} />
-                  {can('customers') && <Route path="customers" element={<CustomerTable />} />}
-                  {can('customers') && <Route path="add-customer" element={<AddCustomer />} />}
-                  {can('customers') && <Route path="edit-customer/:id" element={<EditCustomer />} />}
-                  {can('import') && <Route path="import" element={<ExcelImport />} />}
-                  <Route path="backup" element={<BackupPage />} />
-                  {user.role === 'admin' && <Route path="admin" element={<AdminPanel />} />}
-                  <Route path="*" element={<Navigate to="/" />} />
-                </Route>
-              </Routes>
-            )}
-          </HashRouter>
-        </AuthContext.Provider>
+        <ThemeContext.Provider value={{ isDark, toggle: toggleTheme }}>
+          <AuthContext.Provider value={{ user, login, logout, can }}>
+            <HashRouter>
+              {!user ? (
+                <LoginPage />
+              ) : (
+                <Routes>
+                  <Route path="/" element={<AppLayout />}>
+                    <Route index element={<Dashboard />} />
+                    {can('customers') && <Route path="customers" element={<CustomerTable />} />}
+                    {can('customers') && <Route path="add-customer" element={<AddCustomer />} />}
+                    {can('customers') && <Route path="edit-customer/:id" element={<EditCustomer />} />}
+                    {can('import') && <Route path="import" element={<ExcelImport />} />}
+                    <Route path="backup" element={<BackupPage />} />
+                    {user.role === 'admin' && <Route path="admin" element={<AdminPanel />} />}
+                    <Route path="*" element={<Navigate to="/" />} />
+                  </Route>
+                </Routes>
+              )}
+            </HashRouter>
+          </AuthContext.Provider>
+        </ThemeContext.Provider>
       </AntApp>
     </ConfigProvider>
   )

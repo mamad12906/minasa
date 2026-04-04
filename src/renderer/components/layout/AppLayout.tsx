@@ -11,12 +11,12 @@ export default function AppLayout() {
       <Sidebar />
       <Layout style={{ marginRight: 220, transition: 'all 0.2s' }}>
         <Content style={{
-          margin: 24,
-          padding: 24,
+          margin: 32,
+          padding: 0,
           minHeight: 280,
-          background: '#f0f2f5',
+          background: 'transparent',
           overflow: 'auto',
-          height: 'calc(100vh - 48px)'
+          height: 'calc(100vh - 64px)',
         }}>
           <Outlet />
         </Content>
