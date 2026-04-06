@@ -133,9 +133,14 @@ export default function ExcelImport() {
 
     if (user?.platform_name) (activeMapping as any).__force_platform__ = user.platform_name
     ;(activeMapping as any).__has_header_row__ = hasHeaderRow
+    ;(activeMapping as any).__user_id__ = user?.id || 0
 
     window.api.excel.importData(filePath, activeMapping)
-      .then((res: any) => { setResult(res || { success: 0, failed: 0, errors: ['نتيجة فارغة'] }); setStep(2); setImporting(false) })
+      .then((res: any) => {
+        const r = res || { success: 0, failed: 0, errors: ['نتيجة فارغة'] }
+        setResult(r); setStep(2); setImporting(false)
+        if (r.success > 0) message.info('لرفع الزبائن للسيرفر، اذهب لصفحة نسخ احتياطي واضغط "رفع للسيرفر"')
+      })
       .catch((err: any) => { setResult({ success: 0, failed: 0, errors: [`خطأ: ${String(err?.message || err)}`] }); setStep(2); setImporting(false) })
   }
 

@@ -93,6 +93,23 @@ router.put('/:id', async (req: AuthRequest, res) => {
   res.json(result.rows[0])
 })
 
+// Delete ALL customers (admin only)
+router.delete('/all/delete', async (req: AuthRequest, res) => {
+  if (req.user!.role !== 'admin') return res.status(403).json({ error: 'admin only' })
+  await pool.query('DELETE FROM reminders')
+  const result = await pool.query('DELETE FROM customers')
+  res.json({ success: true, deleted: result.rowCount })
+})
+
+// Delete all customers of a specific user (admin only)
+router.delete('/user/:userId/delete', async (req: AuthRequest, res) => {
+  if (req.user!.role !== 'admin') return res.status(403).json({ error: 'admin only' })
+  const userId = req.params.userId
+  await pool.query('DELETE FROM reminders WHERE customer_id IN (SELECT id FROM customers WHERE user_id = $1)', [userId])
+  const result = await pool.query('DELETE FROM customers WHERE user_id = $1', [userId])
+  res.json({ success: true, deleted: result.rowCount })
+})
+
 // Delete customer
 router.delete('/:id', async (req: AuthRequest, res) => {
   await pool.query('DELETE FROM customers WHERE id = $1', [req.params.id])

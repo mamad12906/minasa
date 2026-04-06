@@ -62,63 +62,92 @@ function registerFileIPC() {
     }
   })
 
-  // Read Excel - get ALL columns from file (no conditions)
+  // Read Excel - get ALL columns, no conditions, super simple
   ipcMain.handle('excel:readHeaders', (_event, filePath: string) => {
+    console.log('[readHeaders] START:', filePath)
+    const empty = { headers: [], hasHeaderRow: false, totalRows: 0, preview: [] }
     try {
       const XLSX = require('xlsx')
-      const workbook = XLSX.readFile(filePath)
-      const sheetName = workbook.SheetNames[0]
-      if (!sheetName) return { headers: [], hasHeaderRow: false, totalRows: 0, preview: [] }
-      const sheet = workbook.Sheets[sheetName]
-      if (!sheet) return { headers: [], hasHeaderRow: false, totalRows: 0, preview: [] }
+      const fs = require('fs')
+      console.log('[readHeaders] XLSX loaded')
+      // Read file as buffer first (avoids permission issues)
+      const buffer = fs.readFileSync(filePath)
+      console.log('[readHeaders] File buffer size:', buffer.length)
+      const workbook = XLSX.read(buffer, { type: 'buffer' })
+      console.log('[readHeaders] File read, sheets:', workbook.SheetNames)
+      const sheet = workbook.Sheets[workbook.SheetNames[0]]
+      if (!sheet) { console.log('[readHeaders] No sheet'); return empty }
 
-      const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as any[][]
-      if (!rawData || rawData.length === 0) return { headers: [], hasHeaderRow: false, totalRows: 0, preview: [] }
+      // Simple approach: get ref range
+      const ref = sheet['!ref']
+      console.log('[readHeaders] Ref:', ref)
+      if (!ref) return empty
 
-      // Get the first row
-      const firstRow = rawData[0] || []
-      const totalCols = Math.max(...rawData.slice(0, 10).map(r => (r || []).length), 0)
+      // Read all data as array of arrays
+      const allRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+      console.log('[readHeaders] Total rows:', allRows.length)
+      if (allRows.length === 0) return empty
 
-      // Generate column names: use first row values, or "عمود 1", "عمود 2"...
+      // Find max columns
+      let maxCols = 0
+      for (let i = 0; i < Math.min(allRows.length, 20); i++) {
+        if (allRows[i] && allRows[i].length > maxCols) maxCols = allRows[i].length
+      }
+      console.log('[readHeaders] Max cols:', maxCols)
+
+      // Build headers from first row
+      const firstRow = allRows[0] || []
       const headers: string[] = []
-      for (let c = 0; c < totalCols; c++) {
-        const val = firstRow[c] != null ? String(firstRow[c]).trim() : ''
-        headers.push(val || `عمود ${c + 1}`)
+      for (let c = 0; c < maxCols; c++) {
+        const v = firstRow[c]
+        const s = v != null && v !== '' ? String(v).trim() : ''
+        headers.push(s || ('\u0639\u0645\u0648\u062f ' + (c + 1))) // عمود X
+      }
+      console.log('[readHeaders] Headers:', headers)
+
+      // Guess if first row is header
+      let hasNum = false
+      for (const v of firstRow) {
+        if (v != null && /^\d{5,}$/.test(String(v).trim())) { hasNum = true; break }
+      }
+      const hasHeaderRow = !hasNum && headers.some(h => !/^\u0639\u0645\u0648\u062f \d+$/.test(h))
+
+      // Preview
+      const start = hasHeaderRow ? 1 : 0
+      const preview: string[][] = []
+      for (let r = start; r < Math.min(start + 3, allRows.length); r++) {
+        const row: string[] = []
+        for (let c = 0; c < maxCols; c++) {
+          row.push(allRows[r] && allRows[r][c] != null ? String(allRows[r][c]) : '')
+        }
+        preview.push(row)
       }
 
-      // Check if first row looks like headers (text, not numbers)
-      const firstRowTexts = firstRow.map((v: any) => String(v || '').trim()).filter(Boolean)
-      const hasNumbers = firstRowTexts.some((v: string) => /^\d{5,}$/.test(v)) // phone/card numbers
-      const hasHeaderRow = firstRowTexts.length > 0 && !hasNumbers
-
-      // Preview: first 3 data rows
-      const dataStart = hasHeaderRow ? 1 : 0
-      const preview = rawData.slice(dataStart, dataStart + 3).map(row =>
-        headers.map((_, c) => row[c] != null ? String(row[c]) : '')
-      )
-
-      return {
-        headers,
-        hasHeaderRow,
-        totalRows: rawData.length - (hasHeaderRow ? 1 : 0),
-        preview
-      }
+      const result = { headers, hasHeaderRow, totalRows: allRows.length - (hasHeaderRow ? 1 : 0), preview }
+      console.log('[readHeaders] SUCCESS:', headers.length, 'cols,', result.totalRows, 'rows')
+      return result
     } catch (err: any) {
-      console.error('[excel:readHeaders] Error:', err.message)
-      return { headers: [], hasHeaderRow: false, totalRows: 0, preview: [] }
+      console.error('[readHeaders] ERROR:', err.message, err.stack)
+      return empty
     }
   })
 
   // Import Excel data - supports files with and without header row
   ipcMain.handle('excel:import', (_event, filePath: string, mapping: any) => {
+    console.log('[excel:import] START file:', filePath)
+    console.log('[excel:import] Mapping keys:', Object.keys(mapping || {}))
     try {
       const XLSX = require('xlsx')
       const forcePlatform = (mapping as any).__force_platform__ || ''
       const hasHeaderRow = (mapping as any).__has_header_row__ !== false
+      const forceUserId = (mapping as any).__user_id__ || 0
       delete (mapping as any).__force_platform__
       delete (mapping as any).__has_header_row__
+      delete (mapping as any).__user_id__
 
-      const workbook = XLSX.readFile(filePath)
+      const fs = require('fs')
+      const buffer = fs.readFileSync(filePath)
+      const workbook = XLSX.read(buffer, { type: 'buffer' })
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
 
       // Read as raw array of arrays
@@ -158,24 +187,33 @@ function registerFileIPC() {
       const baseFields = ['platform_name', 'full_name', 'mother_name', 'phone_number', 'card_number', 'category', 'ministry_name', 'status_note', 'reminder_date', 'reminder_text', 'user_id', 'months_count', 'notes']
       const allFields = [...baseFields, ...customCols]
       const stmt = db.prepare(`INSERT INTO customers (${allFields.join(', ')}) VALUES (${allFields.map(() => '?').join(', ')})`)
+      // Duplicate check: same full_name + mother_name + phone_number
+      const checkDup = db.prepare('SELECT id FROM customers WHERE full_name = ? AND mother_name = ? AND phone_number = ?')
 
-      let success = 0, failed = 0
+      let success = 0, failed = 0, skipped = 0
       const errors: string[] = []
 
       const run = db.transaction(() => {
         for (let i = 0; i < dataRows.length; i++) {
           try {
             const row = dataRows[i]
-            if (!row || row.every((v: any) => !v || String(v).trim() === '')) continue // skip empty rows
+            if (!row || row.every((v: any) => !v || String(v).trim() === '')) continue
 
             const fullName = getValue(row, 'full_name')
-            if (!fullName) { failed++; continue } // skip rows without name silently
+            if (!fullName) { failed++; continue }
+
+            const motherName = getValue(row, 'mother_name')
+            const phone = getValue(row, 'phone_number')
+
+            // Skip duplicate
+            const existing = checkDup.get(fullName, motherName, phone)
+            if (existing) { skipped++; continue }
 
             const vals = [
-              forcePlatform || getValue(row, 'platform_name'), fullName, getValue(row, 'mother_name'),
-              getValue(row, 'phone_number'), getValue(row, 'card_number'), getValue(row, 'category'),
+              forcePlatform || getValue(row, 'platform_name'), fullName, motherName,
+              phone, getValue(row, 'card_number'), getValue(row, 'category'),
               getValue(row, 'ministry_name'), getValue(row, 'status_note'), getValue(row, 'reminder_date'),
-              getValue(row, 'reminder_text'), parseInt(getValue(row, 'user_id')) || 0,
+              getValue(row, 'reminder_text'), forceUserId || parseInt(getValue(row, 'user_id')) || 0,
               parseInt(getValue(row, 'months_count')) || 0, getValue(row, 'notes'),
               ...customCols.map(c => getValue(row, c))
             ]
@@ -185,9 +223,11 @@ function registerFileIPC() {
         }
       })
       run()
+      console.log('[excel:import] DONE success:', success, 'failed:', failed, 'skipped:', skipped)
+      if (skipped > 0) errors.unshift(`تم تخطي ${skipped} اسم مكرر`)
       return { success, failed, errors }
     } catch (err: any) {
-      console.error('[excel:import] Error:', err.message)
+      console.error('[excel:import] ERROR:', err.message, err.stack)
       return { success: 0, failed: 0, errors: [String(err?.message || err)] }
     }
   })
@@ -313,6 +353,142 @@ function registerFileIPC() {
       })
       return filePath
     } catch (err: any) { console.error('[backup:excel-user]', err.message); return null }
+  })
+
+  // Fast server request helper
+  const serverRequest = (method: string, serverUrl: string, urlPath: string, token: string, apiKey: string): Promise<any> => {
+    const https = require('https'); const http = require('http')
+    return new Promise((resolve) => {
+      const headers: any = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      if (apiKey) headers['x-api-key'] = apiKey
+      const req = (serverUrl.startsWith('https') ? https : http).request(`${serverUrl}${urlPath}`, { method, headers }, (res: any) => {
+        let d = ''; res.on('data', (c: any) => d += c)
+        res.on('end', () => { try { resolve(JSON.parse(d)) } catch { resolve({ status: res.statusCode }) } })
+      })
+      req.on('error', () => resolve(null))
+      req.end()
+    })
+  }
+
+  // Delete ALL customers - local + server (1 SQL command each, instant)
+  ipcMain.handle('db:delete-all-customers', async (_event, serverUrl?: string, token?: string, apiKey?: string) => {
+    try {
+      const { getDatabase } = require('./database/connection')
+      const db = getDatabase()
+      const count = (db.prepare('SELECT COUNT(*) as c FROM customers').get() as any).c
+      db.exec('DELETE FROM reminders')
+      db.exec('DELETE FROM customers')
+      console.log('[delete-all] Local:', count)
+
+      let serverDeleted = 0
+      if (serverUrl) {
+        const res = await serverRequest('DELETE', serverUrl, '/api/customers/all/delete', token || '', apiKey || '')
+        serverDeleted = res?.deleted || 0
+        console.log('[delete-all] Server:', serverDeleted)
+      }
+      return { success: true, deleted: count, serverDeleted }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  // Delete user's customers - local + server (1 SQL command each, instant)
+  ipcMain.handle('db:delete-user-customers', async (_event, userId: number, serverUrl?: string, token?: string, apiKey?: string) => {
+    try {
+      const { getDatabase } = require('./database/connection')
+      const db = getDatabase()
+      const count = (db.prepare('SELECT COUNT(*) as c FROM customers WHERE user_id = ?').get(userId) as any).c
+      db.exec(`DELETE FROM reminders WHERE customer_id IN (SELECT id FROM customers WHERE user_id = ${userId})`)
+      db.prepare('DELETE FROM customers WHERE user_id = ?').run(userId)
+      console.log('[delete-user] Local:', count)
+
+      let serverDeleted = 0
+      if (serverUrl) {
+        const res = await serverRequest('DELETE', serverUrl, `/api/customers/user/${userId}/delete`, token || '', apiKey || '')
+        serverDeleted = res?.deleted || 0
+        console.log('[delete-user] Server:', serverDeleted)
+      }
+      return { success: true, deleted: count, serverDeleted }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  // Push all local customers to server (runs in main process - survives page changes)
+  let pushInProgress = false
+  ipcMain.handle('sync:push-all-to-server', async (_event, serverUrl: string, token: string, apiKey: string) => {
+    if (pushInProgress) return { success: false, error: 'المزامنة قيد التنفيذ' }
+    pushInProgress = true
+    console.log('[sync:push] Starting...')
+
+    try {
+      const { getDatabase } = require('./database/connection')
+      const db = getDatabase()
+      const customers = db.prepare('SELECT * FROM customers').all()
+      console.log('[sync:push] Local customers:', customers.length)
+
+      const https = require('https')
+      const http = require('http')
+
+      const doRequest = (method: string, urlPath: string, body: any): Promise<any> => {
+        return new Promise((resolve) => {
+          const fullUrl = `${serverUrl}${urlPath}`
+          const headers: any = { 'Content-Type': 'application/json' }
+          if (token) headers['Authorization'] = `Bearer ${token}`
+          if (apiKey) headers['x-api-key'] = apiKey
+          const req = (fullUrl.startsWith('https') ? https : http).request(fullUrl, { method, headers }, (res: any) => {
+            let data = ''
+            res.on('data', (d: any) => data += d)
+            res.on('end', () => { try { resolve({ status: res.statusCode, data: JSON.parse(data) }) } catch { resolve({ status: res.statusCode, data }) } })
+          })
+          req.on('error', () => resolve({ status: 0, data: null }))
+          if (body) req.write(JSON.stringify(body))
+          req.end()
+        })
+      }
+
+      // First get existing customers from server to check duplicates
+      let serverCustomers: any[] = []
+      try {
+        const res = await doRequest('GET', '/api/customers?page=1&pageSize=50000', null)
+        serverCustomers = res?.data?.data || []
+        console.log('[sync:push] Server has:', serverCustomers.length, 'customers')
+      } catch {}
+
+      // Build server lookup: full_name+mother_name+phone
+      const serverSet = new Set(serverCustomers.map((c: any) =>
+        `${(c.full_name || '').trim()}|${(c.mother_name || '').trim()}|${(c.phone_number || '').trim()}`
+      ))
+
+      let synced = 0, skipped = 0, failed = 0
+
+      for (const c of customers) {
+        const key = `${(c.full_name || '').trim()}|${(c.mother_name || '').trim()}|${(c.phone_number || '').trim()}`
+        if (serverSet.has(key)) { skipped++; continue } // Already on server
+
+        const res = await doRequest('POST', '/api/customers', c)
+        if (res.status >= 200 && res.status < 300) {
+          synced++
+          serverSet.add(key) // Prevent sending same customer twice
+        } else { failed++ }
+
+        // Send progress to renderer
+        if (mainWindow && (synced + skipped + failed) % 50 === 0) {
+          mainWindow.webContents.send('sync-progress', { synced, skipped, failed, total: customers.length })
+        }
+      }
+
+      console.log('[sync:push] DONE synced:', synced, 'skipped:', skipped, 'failed:', failed)
+      pushInProgress = false
+      // Notify renderer
+      if (mainWindow) mainWindow.webContents.send('sync-progress', { synced, skipped, failed, total: customers.length, done: true })
+      return { success: true, synced, skipped, failed, total: customers.length }
+    } catch (err: any) {
+      console.error('[sync:push] ERROR:', err.message)
+      pushInProgress = false
+      return { success: false, synced: 0, failed: 0, error: err.message }
+    }
   })
 
   // Auto-backup with interval

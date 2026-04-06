@@ -4,15 +4,16 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, DollarOutli
 import dayjs from 'dayjs'
 
 // Invoice IPC through preload safeInvoke
+const i2 = () => (window as any).__ipc2
+
 const inv = {
-  list: (p: any) => (window as any).__localApi?.excel ? // check if localApi exists
-    (window as any).__ipcDirect?.('invoice:list', p) : Promise.resolve({ data: [], total: 0 }),
-  create: (input: any) => (window as any).__ipcDirect?.('invoice:create', input),
-  update: (id: number, input: any) => (window as any).__ipcDirect?.('invoice:update', id, input),
-  delete: (id: number) => (window as any).__ipcDirect?.('invoice:delete', id),
-  payments: (id: number) => (window as any).__ipcDirect?.('invoice:payments', id),
-  addPayment: (input: any) => (window as any).__ipcDirect?.('payment:create', input),
-  deletePayment: (id: number) => (window as any).__ipcDirect?.('payment:delete', id),
+  list: (p: any) => (i2()?.invoiceList(p) || Promise.resolve(null)).then((r: any) => r || { data: [], total: 0 }),
+  create: (input: any) => i2()?.invoiceCreate(input) || Promise.resolve(null),
+  update: (id: number, input: any) => i2()?.invoiceUpdate(id, input) || Promise.resolve(null),
+  delete: (id: number) => i2()?.invoiceDelete(id) || Promise.resolve(null),
+  payments: (id: number) => (i2()?.invoicePayments(id) || Promise.resolve(null)).then((r: any) => r || []),
+  addPayment: (input: any) => i2()?.paymentCreate(input) || Promise.resolve(null),
+  deletePayment: (id: number) => i2()?.paymentDelete(id) || Promise.resolve(null),
 }
 
 export default function InvoicePage() {

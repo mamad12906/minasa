@@ -6,7 +6,7 @@ import {
   CrownOutlined, BellOutlined, LogoutOutlined, SaveOutlined,
   CloudDownloadOutlined, MoonOutlined, SunOutlined,
   WifiOutlined, DisconnectOutlined, SyncOutlined, HistoryOutlined,
-  DollarOutlined, BarChartOutlined
+  DollarOutlined, BarChartOutlined, DatabaseOutlined
 } from '@ant-design/icons'
 import { useAuth, useTheme } from '../../App'
 import { isOnline, getSyncQueueCount, processSyncQueue, pullFromServer, getLastSyncTime, isSyncing } from '../../api/http'
@@ -103,7 +103,8 @@ export default function Sidebar() {
     { key: '/backup', icon: <SaveOutlined />, label: 'نسخ احتياطي' },
     ...(user?.role === 'admin' ? [
       { key: '/admin', icon: <CrownOutlined />, label: 'لوحة الأدمن' },
-      { key: '/audit', icon: <HistoryOutlined />, label: 'سجل التغييرات' }
+      { key: '/audit', icon: <HistoryOutlined />, label: 'سجل التغييرات' },
+      { key: '/database', icon: <DatabaseOutlined />, label: 'قاعدة البيانات' }
     ] : [])
   ]
 

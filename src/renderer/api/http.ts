@@ -115,13 +115,8 @@ function serverGet(path: string, params?: Record<string, any>) {
 const local = () => (window as any).__localApi
 const hasLocal = () => !!(window as any).__localApi
 
-// Direct IPC call (always available - for Excel/Backup that are registered in index.ts)
-const ipcDirect = (channel: string, ...args: any[]): Promise<any> => {
-  const fn = (window as any).__ipcDirect
-  if (fn) return fn(channel, ...args)
-  // Fallback to localApi if available
-  return Promise.resolve(null)
-}
+// Direct IPC (always available - registered in index.ts, no SQLite dependency)
+const ipc2 = () => (window as any).__ipc2
 
 // ===== Connection Check =====
 async function checkConnection(): Promise<boolean> {
@@ -252,13 +247,16 @@ export function getLastSyncTime(): string {
 // ===== Hybrid API: try server, fallback to local =====
 
 async function hybridRead(serverFn: () => Promise<any>, localFn: () => Promise<any>) {
-  // Try server first
+  // Try local first (has imported/synced data)
+  if (hasLocal()) {
+    try {
+      const localResult = await localFn()
+      if (localResult != null) return localResult
+    } catch { /* local failed */ }
+  }
+  // Fallback to server
   if (IS_ONLINE && BASE_URL) {
     try { return await serverFn() } catch { IS_ONLINE = false }
-  }
-  // Fallback to local
-  if (hasLocal()) {
-    try { return await localFn() } catch { /* local failed too */ }
   }
   return null
 }
@@ -447,21 +445,20 @@ export const api = {
     delete: (id: number) => local().columns.delete(id),
   },
 
-  // Excel & Backup: use __ipcDirect (always available, registered in index.ts)
   excel: {
-    selectFile: () => ipcDirect('excel:selectFile'),
-    readHeaders: (filePath: string) => ipcDirect('excel:readHeaders', filePath),
-    importData: (filePath: string, mapping: any) => ipcDirect('excel:import', filePath, mapping).then((r: any) => r || { success: 0, failed: 0, errors: ['فشل الاستيراد'] }),
+    selectFile: () => ipc2()?.excelSelectFile() || Promise.resolve(null),
+    readHeaders: (filePath: string) => ipc2()?.excelReadHeaders(filePath) || Promise.resolve(null),
+    importData: (filePath: string, mapping: any) => (ipc2()?.excelImport(filePath, mapping) || Promise.resolve(null)).then((r: any) => r || { success: 0, failed: 0, errors: ['فشل'] }),
   },
 
   backup: {
-    database: () => ipcDirect('backup:database'),
-    restore: () => ipcDirect('backup:restore'),
-    excelAll: () => ipcDirect('backup:excel-all'),
-    excelUser: (userId: number, userName: string) => ipcDirect('backup:excel-user', userId, userName),
-    autoSetup: (dir: string, hours: number) => ipcDirect('backup:auto-setup', dir, hours),
-    autoStop: () => ipcDirect('backup:auto-stop'),
-    autoGet: () => ipcDirect('backup:auto-get').then((r: any) => r || { dir: '', hours: 0 }),
-    selectDir: () => ipcDirect('backup:select-dir'),
+    database: () => ipc2()?.backupDatabase() || Promise.resolve(null),
+    restore: () => ipc2()?.backupRestore() || Promise.resolve(null),
+    excelAll: () => ipc2()?.backupExcelAll() || Promise.resolve(null),
+    excelUser: (userId: number, userName: string) => ipc2()?.backupExcelUser(userId, userName) || Promise.resolve(null),
+    autoSetup: (dir: string, hours: number) => ipc2()?.backupAutoSetup(dir, hours) || Promise.resolve({ success: false }),
+    autoStop: () => ipc2()?.backupAutoStop() || Promise.resolve({ success: false }),
+    autoGet: () => (ipc2()?.backupAutoGet() || Promise.resolve(null)).then((r: any) => r || { dir: '', hours: 0 }),
+    selectDir: () => ipc2()?.backupSelectDir() || Promise.resolve(null),
   },
 }

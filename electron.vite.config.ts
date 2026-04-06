@@ -10,7 +10,7 @@ export default defineConfig({
         entry: 'src/main/index.ts'
       },
       rollupOptions: {
-        external: ['electron']
+        external: ['electron', 'better-sqlite3', 'bindings', 'file-uri-to-path']
       }
     }
   },

@@ -14,6 +14,7 @@ import AddCustomer from './components/customers/AddCustomer'
 import EditCustomer from './components/customers/EditCustomer'
 import LoginPage from './components/admin/LoginPage'
 import AuditLog from './components/admin/AuditLog'
+import DatabaseManager from './components/admin/DatabaseManager'
 import InvoicePage from './components/invoices/InvoicePage'
 import ReportsPage from './components/reports/ReportsPage'
 
@@ -95,6 +96,7 @@ export default function App() {
                       <Route path="backup" element={<BackupPage />} />
                       {user.role === 'admin' && <Route path="admin" element={<AdminPanel />} />}
                       {user.role === 'admin' && <Route path="audit" element={<AuditLog />} />}
+                    {user.role === 'admin' && <Route path="database" element={<DatabaseManager />} />}
                       <Route path="*" element={<Navigate to="/" />} />
                     </Route>
                   </Routes>

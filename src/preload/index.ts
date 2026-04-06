@@ -107,8 +107,30 @@ const configApi = {
 contextBridge.exposeInMainWorld('__config', configApi)
 contextBridge.exposeInMainWorld('__appVersion', () => safeInvoke('app:version').then(r => r || ''))
 
-// Direct IPC invoke (for invoice channels not in localApi)
-contextBridge.exposeInMainWorld('__ipcDirect', (channel: string, ...args: any[]) => safeInvoke(channel, ...args))
+// Direct IPC for Excel/Backup/Invoice (explicit methods, no rest args)
+contextBridge.exposeInMainWorld('__ipc2', {
+  excelSelectFile: () => safeInvoke('excel:selectFile'),
+  excelReadHeaders: (filePath: string) => safeInvoke('excel:readHeaders', filePath),
+  excelImport: (filePath: string, mapping: any) => safeInvoke('excel:import', filePath, mapping),
+  backupDatabase: () => safeInvoke('backup:database'),
+  backupRestore: () => safeInvoke('backup:restore'),
+  backupExcelAll: () => safeInvoke('backup:excel-all'),
+  backupExcelUser: (userId: number, userName: string) => safeInvoke('backup:excel-user', userId, userName),
+  backupAutoSetup: (dir: string, hours: number) => safeInvoke('backup:auto-setup', dir, hours),
+  backupAutoStop: () => safeInvoke('backup:auto-stop'),
+  backupAutoGet: () => safeInvoke('backup:auto-get'),
+  backupSelectDir: () => safeInvoke('backup:select-dir'),
+  invoiceList: (params: any) => safeInvoke('invoice:list', params),
+  invoiceCreate: (input: any) => safeInvoke('invoice:create', input),
+  invoiceUpdate: (id: number, input: any) => safeInvoke('invoice:update', id, input),
+  invoiceDelete: (id: number) => safeInvoke('invoice:delete', id),
+  invoicePayments: (id: number) => safeInvoke('invoice:payments', id),
+  paymentCreate: (input: any) => safeInvoke('payment:create', input),
+  paymentDelete: (id: number) => safeInvoke('payment:delete', id),
+  syncPushAll: (serverUrl: string, token: string, apiKey: string) => safeInvoke('sync:push-all-to-server', serverUrl, token, apiKey),
+  dbDeleteAllCustomers: (serverUrl: string, token: string, apiKey: string) => safeInvoke('db:delete-all-customers', serverUrl, token, apiKey),
+  dbDeleteUserCustomers: (userId: number, serverUrl: string, token: string, apiKey: string) => safeInvoke('db:delete-user-customers', userId, serverUrl, token, apiKey),
+})
 
 // Expose local IPC API
 contextBridge.exposeInMainWorld('__localApi', localApi)
@@ -129,4 +151,5 @@ contextBridge.exposeInMainWorld('__updater', {
   onUpdateAvailable: (callback: any) => ipcRenderer.on('update-available', (_e, info) => callback(info)),
   onProgress: (callback: any) => ipcRenderer.on('update-progress', (_e, info) => callback(info)),
   onUpdateDownloaded: (callback: any) => ipcRenderer.on('update-downloaded', () => callback()),
+  onSyncProgress: (callback: any) => ipcRenderer.on('sync-progress', (_e, info) => callback(info)),
 })

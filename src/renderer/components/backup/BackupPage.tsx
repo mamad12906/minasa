@@ -3,7 +3,7 @@ import { Card, Button, message, Row, Col, Tag, InputNumber, Modal } from 'antd'
 import {
   DatabaseOutlined, FileExcelOutlined, SaveOutlined, CheckCircleOutlined,
   CloudUploadOutlined, FolderOpenOutlined, ClockCircleOutlined, StopOutlined,
-  ExclamationCircleOutlined, ReloadOutlined, FilePdfOutlined
+  ExclamationCircleOutlined, ReloadOutlined, FilePdfOutlined, CloudSyncOutlined
 } from '@ant-design/icons'
 import { useAuth } from '../../App'
 import { jsPDF } from 'jspdf'
@@ -168,6 +168,37 @@ export default function BackupPage() {
               <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 12 }}>تقرير بجميع الزبائن</p>
               <Button type="primary" size="large" loading={loading === 'pdf'} onClick={exportPDF}
                 style={{ borderRadius: 8, minWidth: 150, background: '#CF222E', borderColor: '#CF222E' }}><FilePdfOutlined /> تصدير PDF</Button>
+            </div>
+          </Card>
+        </Col>
+        {/* Sync to server */}
+        <Col xs={24} sm={12} lg={8}>
+          <Card hoverable className="backup-card" style={{ borderRadius: 14, border: '1px solid var(--border-light)', height: '100%', background: 'var(--bg-card)', boxShadow: 'var(--shadow-card)' }}>
+            <div style={{ textAlign: 'center', padding: '12px 0' }}>
+              <div className="backup-icon" style={iconBox('#D29922')}><CloudSyncOutlined /></div>
+              <h3 style={{ color: 'var(--text-primary)', marginBottom: 4 }}>رفع للسيرفر</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 12 }}>رفع كل الزبائن المحليين للسيرفر</p>
+              <Button type="primary" size="large" loading={loading === 'push-server'}
+                onClick={async () => {
+                  setLoading('push-server')
+                  const serverUrl = localStorage.getItem('minasa_server_url') || ''
+                  const token = localStorage.getItem('minasa_token') || ''
+                  const apiKey = localStorage.getItem('minasa_api_key') || ''
+                  if (!serverUrl) { message.error('لا يوجد رابط سيرفر'); setLoading(null); return }
+                  message.info('بدأ الرفع... يمكنك التنقل بين الصفحات')
+                  const ipc2 = (window as any).__ipc2
+                  ipc2?.syncPushAll(serverUrl, token, apiKey).then((res: any) => {
+                    setLoading(null)
+                    if (res?.success) {
+                      const parts = []
+                      if (res.synced > 0) parts.push(`رُفع ${res.synced}`)
+                      if (res.skipped > 0) parts.push(`تخطي ${res.skipped} مكرر`)
+                      if (res.failed > 0) parts.push(`فشل ${res.failed}`)
+                      message.success(parts.join(' | ') || 'تم')
+                    } else { message.error('فشل: ' + (res?.error || '')) }
+                  }).catch(() => { setLoading(null); message.error('خطأ في الرفع') })
+                }}
+                style={{ borderRadius: 8, minWidth: 150, background: '#D29922', borderColor: '#D29922' }}><CloudSyncOutlined /> رفع للسيرفر</Button>
             </div>
           </Card>
         </Col>

@@ -13,7 +13,7 @@ export interface ColumnMapping {
 }
 
 export function readExcelHeaders(filePath: string): string[] {
-  const workbook = XLSX.readFile(filePath)
+  const workbook = XLSX.read(require('fs').readFileSync(filePath), { type: 'buffer' })
   const sheetName = workbook.SheetNames[0]
   if (!sheetName) return []
   const sheet = workbook.Sheets[sheetName]
@@ -41,7 +41,7 @@ export function readExcelHeaders(filePath: string): string[] {
 }
 
 export function readExcelData(filePath: string): any[] {
-  const workbook = XLSX.readFile(filePath)
+  const workbook = XLSX.read(require('fs').readFileSync(filePath), { type: 'buffer' })
   const sheetName = workbook.SheetNames[0]
   const sheet = workbook.Sheets[sheetName]
   return XLSX.utils.sheet_to_json<any>(sheet)
