@@ -3,9 +3,15 @@ import { contextBridge, ipcRenderer } from 'electron'
 // Safe IPC invoke - returns null/error if handler not registered
 function safeInvoke(channel: string, ...args: any[]) {
   return ipcRenderer.invoke(channel, ...args).catch((err: any) => {
-    console.warn(`IPC ${channel} not available:`, err.message)
+    console.warn(`[IPC FAIL] ${channel}:`, err.message)
     return null
   })
+}
+
+// Debug: log all IPC calls
+const debugInvoke = (channel: string, ...args: any[]) => {
+  console.log(`[IPC] ${channel}`, args.length > 0 ? args[0]?.constructor?.name || typeof args[0] : '')
+  return safeInvoke(channel, ...args)
 }
 
 // Full IPC API for local SQLite operations

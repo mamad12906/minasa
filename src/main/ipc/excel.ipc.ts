@@ -1,4 +1,8 @@
 import { ipcMain, dialog, BrowserWindow, app } from 'electron'
+
+function getWin(event: any): BrowserWindow {
+  return BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
+}
 import { readExcelHeaders, importExcelData, exportToExcel } from '../services/excel.service'
 import { getDatabase, closeDatabase } from '../database/connection'
 import path from 'path'
@@ -9,8 +13,8 @@ let autoBackupInterval: any = null
 
 export function registerExcelIPC(): void {
   ipcMain.handle('excel:selectFile', async (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    const result = await dialog.showOpenDialog(win!, {
+    const win = getWin(event)
+    const result = await dialog.showOpenDialog(win, {
       properties: ['openFile'],
       filters: [{ name: 'Excel', extensions: ['xlsx', 'xls', 'csv'] }]
     })
@@ -19,8 +23,15 @@ export function registerExcelIPC(): void {
   })
 
   ipcMain.handle('excel:readHeaders', (_event, filePath: string) => {
-    try { return readExcelHeaders(filePath) }
-    catch { return [] }
+    console.log('[excel:readHeaders] Reading:', filePath)
+    try {
+      const headers = readExcelHeaders(filePath)
+      console.log('[excel:readHeaders] Found headers:', headers.length, headers.slice(0, 5))
+      return headers
+    } catch (err: any) {
+      console.error('[excel:readHeaders] Error:', err.message)
+      return []
+    }
   })
 
   ipcMain.handle('excel:import', (_event, filePath: string, mapping: any) => {
@@ -33,8 +44,8 @@ export function registerExcelIPC(): void {
   })
 
   ipcMain.handle('excel:exportCustomers', async (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    const result = await dialog.showSaveDialog(win!, {
+    const win = getWin(event)
+    const result = await dialog.showSaveDialog(win, {
       defaultPath: 'customers.xlsx',
       filters: [{ name: 'Excel', extensions: ['xlsx'] }]
     })
@@ -70,18 +81,26 @@ export function registerExcelIPC(): void {
   }
 
   ipcMain.handle('backup:database', async (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    const result = await dialog.showOpenDialog(win!, {
-      properties: ['openDirectory'], title: 'اختر مكان حفظ النسخة الاحتياطية'
-    })
-    if (result.canceled || result.filePaths.length === 0) return null
-    return doBackupDB(result.filePaths[0])
+    console.log('[backup:database] Called')
+    try {
+      const win = getWin(event)
+      const result = await dialog.showOpenDialog(win, {
+        properties: ['openDirectory'], title: 'اختر مكان حفظ النسخة الاحتياطية'
+      })
+      if (result.canceled || result.filePaths.length === 0) return null
+      const path = doBackupDB(result.filePaths[0])
+      console.log('[backup:database] Result:', path)
+      return path
+    } catch (err: any) {
+      console.error('[backup:database] Error:', err.message)
+      return null
+    }
   })
 
   // Restore database from backup
   ipcMain.handle('backup:restore', async (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    const result = await dialog.showOpenDialog(win!, {
+    const win = getWin(event)
+    const result = await dialog.showOpenDialog(win, {
       properties: ['openFile'],
       title: 'اختر ملف النسخة الاحتياطية',
       filters: [{ name: 'Database', extensions: ['db'] }]
@@ -113,8 +132,8 @@ export function registerExcelIPC(): void {
 
   // Admin: export ALL customers with employee name
   ipcMain.handle('backup:excel-all', async (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    const result = await dialog.showOpenDialog(win!, {
+    const win = getWin(event)
+    const result = await dialog.showOpenDialog(win, {
       properties: ['openDirectory'], title: 'اختر مكان حفظ التصدير'
     })
     if (result.canceled || result.filePaths.length === 0) return null
@@ -139,8 +158,8 @@ export function registerExcelIPC(): void {
 
   // User: export only their own customers
   ipcMain.handle('backup:excel-user', async (event, userId: number, userName: string) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    const result = await dialog.showOpenDialog(win!, {
+    const win = getWin(event)
+    const result = await dialog.showOpenDialog(win, {
       properties: ['openDirectory'], title: 'اختر مكان حفظ التصدير'
     })
     if (result.canceled || result.filePaths.length === 0) return null
@@ -203,8 +222,8 @@ export function registerExcelIPC(): void {
   })
 
   ipcMain.handle('backup:select-dir', async (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    const result = await dialog.showOpenDialog(win!, {
+    const win = getWin(event)
+    const result = await dialog.showOpenDialog(win, {
       properties: ['openDirectory'], title: 'اختر مجلد النسخ الاحتياطي التلقائي'
     })
     if (result.canceled || result.filePaths.length === 0) return null
