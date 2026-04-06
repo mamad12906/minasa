@@ -41,13 +41,17 @@ export default function LoginPage() {
     setCheckingServer(true)
     try {
       const controller = new AbortController()
-      setTimeout(() => controller.abort(), 3000)
-      const res = await fetch(`${serverUrlInput.replace(/\/+$/, '')}/api/platforms`, {
+      setTimeout(() => controller.abort(), 4000)
+      const url = serverUrlInput.replace(/\/+$/, '')
+      // Any response from server = connected (even 401/403)
+      const res = await fetch(`${url}/api/platforms`, {
         signal: controller.signal,
         headers: apiKeyInput ? { 'x-api-key': apiKeyInput } : {}
       })
-      setServerStatus(res.ok ? 'connected' : 'disconnected')
+      // Server responded = connected (even if auth failed)
+      setServerStatus('connected')
     } catch {
+      // Network error / timeout = disconnected
       setServerStatus('disconnected')
     }
     setCheckingServer(false)
