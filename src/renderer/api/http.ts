@@ -115,6 +115,14 @@ function serverGet(path: string, params?: Record<string, any>) {
 const local = () => (window as any).__localApi
 const hasLocal = () => !!(window as any).__localApi
 
+// Direct IPC call (always available - for Excel/Backup that are registered in index.ts)
+const ipcDirect = (channel: string, ...args: any[]): Promise<any> => {
+  const fn = (window as any).__ipcDirect
+  if (fn) return fn(channel, ...args)
+  // Fallback to localApi if available
+  return Promise.resolve(null)
+}
+
 // ===== Connection Check =====
 async function checkConnection(): Promise<boolean> {
   if (!BASE_URL) { IS_ONLINE = false; return false }
@@ -439,20 +447,21 @@ export const api = {
     delete: (id: number) => local().columns.delete(id),
   },
 
+  // Excel & Backup: use __ipcDirect (always available, registered in index.ts)
   excel: {
-    selectFile: () => hasLocal() ? local().excel.selectFile() : Promise.resolve(null),
-    readHeaders: (filePath: string) => hasLocal() ? local().excel.readHeaders(filePath) : Promise.resolve([]),
-    importData: (filePath: string, mapping: any) => hasLocal() ? local().excel.importData(filePath, mapping) : Promise.resolve({ success: 0, failed: 0, errors: ['القاعدة المحلية غير متوفرة'] }),
+    selectFile: () => ipcDirect('excel:selectFile'),
+    readHeaders: (filePath: string) => ipcDirect('excel:readHeaders', filePath),
+    importData: (filePath: string, mapping: any) => ipcDirect('excel:import', filePath, mapping).then((r: any) => r || { success: 0, failed: 0, errors: ['فشل الاستيراد'] }),
   },
 
   backup: {
-    database: () => hasLocal() ? local().backup.database() : Promise.resolve(null),
-    restore: () => hasLocal() ? local().backup.restore() : Promise.resolve(null),
-    excelAll: () => hasLocal() ? local().backup.excelAll() : Promise.resolve(null),
-    excelUser: (userId: number, userName: string) => hasLocal() ? local().backup.excelUser(userId, userName) : Promise.resolve(null),
-    autoSetup: (dir: string, hours: number) => hasLocal() ? local().backup.autoSetup(dir, hours) : Promise.resolve({ success: false }),
-    autoStop: () => hasLocal() ? local().backup.autoStop() : Promise.resolve({ success: false }),
-    autoGet: () => hasLocal() ? local().backup.autoGet() : Promise.resolve({ dir: '', hours: 0 }),
-    selectDir: () => hasLocal() ? local().backup.selectDir() : Promise.resolve(null),
+    database: () => ipcDirect('backup:database'),
+    restore: () => ipcDirect('backup:restore'),
+    excelAll: () => ipcDirect('backup:excel-all'),
+    excelUser: (userId: number, userName: string) => ipcDirect('backup:excel-user', userId, userName),
+    autoSetup: (dir: string, hours: number) => ipcDirect('backup:auto-setup', dir, hours),
+    autoStop: () => ipcDirect('backup:auto-stop'),
+    autoGet: () => ipcDirect('backup:auto-get').then((r: any) => r || { dir: '', hours: 0 }),
+    selectDir: () => ipcDirect('backup:select-dir'),
   },
 }
