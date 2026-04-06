@@ -19,7 +19,6 @@ router.get('/', async (req: AuthRequest, res) => {
   let where = 'WHERE 1=1'
   let idx = 1
 
-  // Non-admin: filter by user_id
   const filterUserId = req.user!.role !== 'admin' ? req.user!.id : (userId ? Number(userId) : null)
   if (filterUserId) { where += ` AND user_id = $${idx++}`; params.push(filterUserId) }
   if (search) {
@@ -37,6 +36,34 @@ router.get('/', async (req: AuthRequest, res) => {
 
   const data = dataResult.rows.map(r => ({ ...r, created_at: r.created_at_fmt || r.created_at }))
   res.json({ data, total: Number(countResult.rows[0].total), page: Number(page), pageSize: Number(pageSize) })
+})
+
+// Distinct values (MUST be before /:id)
+router.get('/meta/platforms', async (_req, res) => {
+  const r = await pool.query("SELECT DISTINCT platform_name FROM customers WHERE platform_name != '' ORDER BY platform_name")
+  res.json(r.rows.map(r => r.platform_name))
+})
+
+router.get('/meta/categories', async (_req, res) => {
+  const r = await pool.query("SELECT DISTINCT category FROM customers WHERE category != '' ORDER BY category")
+  res.json(r.rows.map(r => r.category))
+})
+
+// DELETE ALL customers (admin only) - MUST be before /:id
+router.delete('/all/delete', async (req: AuthRequest, res) => {
+  if (req.user!.role !== 'admin') return res.status(403).json({ error: 'admin only' })
+  await pool.query('DELETE FROM reminders')
+  const result = await pool.query('DELETE FROM customers')
+  res.json({ success: true, deleted: result.rowCount })
+})
+
+// DELETE all customers of a specific user (admin only) - MUST be before /:id
+router.delete('/user/:userId/delete', async (req: AuthRequest, res) => {
+  if (req.user!.role !== 'admin') return res.status(403).json({ error: 'admin only' })
+  const userId = req.params.userId
+  await pool.query('DELETE FROM reminders WHERE customer_id IN (SELECT id FROM customers WHERE user_id = $1)', [userId])
+  const result = await pool.query('DELETE FROM customers WHERE user_id = $1', [userId])
+  res.json({ success: true, deleted: result.rowCount })
 })
 
 // Get single customer
@@ -58,13 +85,11 @@ router.post('/', async (req: AuthRequest, res) => {
   )
   const customer = result.rows[0]
 
-  // Manual reminder
   if (input.reminder_date && input.reminder_text) {
     await pool.query('DELETE FROM reminders WHERE customer_id = $1 AND is_done = 0', [customer.id])
     await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)', [customer.id, input.reminder_date, input.reminder_text])
   }
 
-  // Auto-reminder: 2 months before expiry
   if (input.months_count && input.months_count > 2) {
     const startDate = customer.created_at.toISOString().split('T')[0]
     const reminderDate = addMonths(startDate, input.months_count - 2)
@@ -78,14 +103,12 @@ router.post('/', async (req: AuthRequest, res) => {
 // Update customer
 router.put('/:id', async (req: AuthRequest, res) => {
   const input = req.body
-  // Preserve original user_id - don't let it get reset to 0
   const existing = await pool.query('SELECT user_id FROM customers WHERE id = $1', [req.params.id])
   const originalUserId = existing.rows[0]?.user_id || req.user!.id
   const result = await pool.query(
     `UPDATE customers SET platform_name=$1, full_name=$2, mother_name=$3, phone_number=$4, card_number=$5, category=$6, ministry_name=$7, status_note=$8, reminder_date=$9, reminder_text=$10, user_id=$11, months_count=$12, notes=$13, updated_at=NOW() WHERE id=$14 RETURNING *`,
     [input.platform_name||'', input.full_name, input.mother_name||'', input.phone_number||'', input.card_number||'', input.category||'', input.ministry_name||'', input.status_note||'', input.reminder_date||'', input.reminder_text||'', input.user_id || originalUserId, input.months_count||0, input.notes||'', req.params.id]
   )
-  // Sync reminder
   if (input.reminder_date && input.reminder_text) {
     await pool.query('DELETE FROM reminders WHERE customer_id = $1 AND is_done = 0', [req.params.id])
     await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)', [req.params.id, input.reminder_date, input.reminder_text])
@@ -93,38 +116,10 @@ router.put('/:id', async (req: AuthRequest, res) => {
   res.json(result.rows[0])
 })
 
-// Delete ALL customers (admin only)
-router.delete('/all/delete', async (req: AuthRequest, res) => {
-  if (req.user!.role !== 'admin') return res.status(403).json({ error: 'admin only' })
-  await pool.query('DELETE FROM reminders')
-  const result = await pool.query('DELETE FROM customers')
-  res.json({ success: true, deleted: result.rowCount })
-})
-
-// Delete all customers of a specific user (admin only)
-router.delete('/user/:userId/delete', async (req: AuthRequest, res) => {
-  if (req.user!.role !== 'admin') return res.status(403).json({ error: 'admin only' })
-  const userId = req.params.userId
-  await pool.query('DELETE FROM reminders WHERE customer_id IN (SELECT id FROM customers WHERE user_id = $1)', [userId])
-  const result = await pool.query('DELETE FROM customers WHERE user_id = $1', [userId])
-  res.json({ success: true, deleted: result.rowCount })
-})
-
 // Delete customer
 router.delete('/:id', async (req: AuthRequest, res) => {
   await pool.query('DELETE FROM customers WHERE id = $1', [req.params.id])
   res.json({ success: true })
-})
-
-// Distinct values
-router.get('/meta/platforms', async (_req, res) => {
-  const r = await pool.query("SELECT DISTINCT platform_name FROM customers WHERE platform_name != '' ORDER BY platform_name")
-  res.json(r.rows.map(r => r.platform_name))
-})
-
-router.get('/meta/categories', async (_req, res) => {
-  const r = await pool.query("SELECT DISTINCT category FROM customers WHERE category != '' ORDER BY category")
-  res.json(r.rows.map(r => r.category))
 })
 
 // Customer reminders
