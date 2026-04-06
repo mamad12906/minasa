@@ -55,18 +55,44 @@ export default function ExcelImport() {
     ...customColumns.map(col => ({ value: col.column_name, label: col.display_name }))
   ]
 
+  const [hasHeaderRow, setHasHeaderRow] = useState(true)
+  const [totalRows, setTotalRows] = useState(0)
+  const [preview, setPreview] = useState<string[][]>([])
+
   const selectFile = async () => {
     try {
       setError(null)
       const path = await window.api.excel.selectFile()
       if (!path) return
       setFilePath(path)
-      const hdrs = await window.api.excel.readHeaders(path)
+      const result = await window.api.excel.readHeaders(path)
+
+      // Handle both old format (string[]) and new format (object)
+      let hdrs: string[] = []
+      let headerRow = true
+      let rows = 0
+      let prev: string[][] = []
+
+      if (Array.isArray(result)) {
+        // Old format
+        hdrs = result
+      } else if (result && result.headers) {
+        // New format
+        hdrs = result.headers
+        headerRow = result.hasHeaderRow !== false
+        rows = result.totalRows || 0
+        prev = result.preview || []
+      }
+
       if (!hdrs || hdrs.length === 0) {
-        setError('الملف فارغ أو لا يحتوي على عناوين أعمدة. تأكد أن الصف الأول يحتوي على أسماء الأعمدة.')
+        setError('لم يتم العثور على أعمدة في الملف. تأكد أن الملف يحتوي على بيانات.')
         return
       }
+
       setHeaders(hdrs)
+      setHasHeaderRow(headerRow)
+      setTotalRows(rows)
+      setPreview(prev)
 
       // Auto-map
       const autoMapping: Record<string, string> = {}
@@ -80,8 +106,7 @@ export default function ExcelImport() {
             break
           }
         }
-        // Enable all by default
-        if (!autoEnabled[header]) autoEnabled[header] = true
+        autoEnabled[header] = true // Enable all
       }
       setMapping(autoMapping)
       setEnabledColumns(autoEnabled)
@@ -106,10 +131,8 @@ export default function ExcelImport() {
       if (enabledColumns[header] && field) activeMapping[header] = field
     }
 
-    // Set user platform if available
-    if (user?.platform_name) {
-      (activeMapping as any).__force_platform__ = user.platform_name
-    }
+    if (user?.platform_name) (activeMapping as any).__force_platform__ = user.platform_name
+    ;(activeMapping as any).__has_header_row__ = hasHeaderRow
 
     window.api.excel.importData(filePath, activeMapping)
       .then((res: any) => { setResult(res || { success: 0, failed: 0, errors: ['نتيجة فارغة'] }); setStep(2); setImporting(false) })
@@ -166,8 +189,26 @@ export default function ExcelImport() {
       {/* Step 1: Map columns */}
       {step === 1 && (
         <div>
-          <Alert type="info" showIcon style={{ marginBottom: 16 }}
-            message={`${headers.length} عمود في الملف. حدد الأعمدة واربطها بحقول النظام. الأعمدة غير المربوطة لن تُستورد.`} />
+          <Alert type="info" showIcon style={{ marginBottom: 12 }}
+            message={`${headers.length} عمود - ${totalRows || '?'} صف بيانات. اربط كل عمود بالحقل المناسب في النظام.`} />
+
+          {/* Header row toggle */}
+          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Checkbox checked={hasHeaderRow} onChange={e => setHasHeaderRow(e.target.checked)}>
+              الصف الأول عناوين أعمدة (وليس بيانات)
+            </Checkbox>
+          </div>
+
+          {/* Preview */}
+          {preview.length > 0 && (
+            <div style={{ marginBottom: 12, padding: 10, background: 'var(--bg-card-hover)', borderRadius: 8, overflow: 'auto', maxHeight: 120 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>معاينة البيانات:</div>
+              <table style={{ fontSize: 12, width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr>{headers.map((h, i) => <th key={i} style={{ padding: '2px 6px', borderBottom: '1px solid var(--border-color)', textAlign: 'right', color: 'var(--text-secondary)', fontSize: 11 }}>{h}</th>)}</tr></thead>
+                <tbody>{preview.map((row, ri) => <tr key={ri}>{row.map((v, ci) => <td key={ci} style={{ padding: '2px 6px', borderBottom: '1px solid var(--border-light)', color: 'var(--text-primary)' }}>{v || '-'}</td>)}</tr>)}</tbody>
+              </table>
+            </div>
+          )}
 
           <div style={{
             marginBottom: 16, padding: 14, background: 'var(--success-bg)', borderRadius: 8,

@@ -62,58 +62,96 @@ function registerFileIPC() {
     }
   })
 
-  // Read Excel headers
+  // Read Excel - get ALL columns from file (no conditions)
   ipcMain.handle('excel:readHeaders', (_event, filePath: string) => {
     try {
       const XLSX = require('xlsx')
       const workbook = XLSX.readFile(filePath)
       const sheetName = workbook.SheetNames[0]
-      if (!sheetName) return []
+      if (!sheetName) return { headers: [], hasHeaderRow: false, totalRows: 0, preview: [] }
       const sheet = workbook.Sheets[sheetName]
-      if (!sheet) return []
-      // Try raw rows first
-      const data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
-      if (data && data.length > 0) {
-        for (let i = 0; i < Math.min(data.length, 5); i++) {
-          const row = data[i]
-          if (!row) continue
-          const headers = row.map((h: any) => String(h || '').trim()).filter((h: string) => h.length > 0)
-          if (headers.length >= 2) return headers
-        }
+      if (!sheet) return { headers: [], hasHeaderRow: false, totalRows: 0, preview: [] }
+
+      const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as any[][]
+      if (!rawData || rawData.length === 0) return { headers: [], hasHeaderRow: false, totalRows: 0, preview: [] }
+
+      // Get the first row
+      const firstRow = rawData[0] || []
+      const totalCols = Math.max(...rawData.slice(0, 10).map(r => (r || []).length), 0)
+
+      // Generate column names: use first row values, or "عمود 1", "عمود 2"...
+      const headers: string[] = []
+      for (let c = 0; c < totalCols; c++) {
+        const val = firstRow[c] != null ? String(firstRow[c]).trim() : ''
+        headers.push(val || `عمود ${c + 1}`)
       }
-      // Fallback: JSON keys
-      const jsonData = XLSX.utils.sheet_to_json(sheet)
-      if (jsonData.length > 0) return Object.keys(jsonData[0]).filter((k: string) => k && k !== '__EMPTY')
-      return []
+
+      // Check if first row looks like headers (text, not numbers)
+      const firstRowTexts = firstRow.map((v: any) => String(v || '').trim()).filter(Boolean)
+      const hasNumbers = firstRowTexts.some((v: string) => /^\d{5,}$/.test(v)) // phone/card numbers
+      const hasHeaderRow = firstRowTexts.length > 0 && !hasNumbers
+
+      // Preview: first 3 data rows
+      const dataStart = hasHeaderRow ? 1 : 0
+      const preview = rawData.slice(dataStart, dataStart + 3).map(row =>
+        headers.map((_, c) => row[c] != null ? String(row[c]) : '')
+      )
+
+      return {
+        headers,
+        hasHeaderRow,
+        totalRows: rawData.length - (hasHeaderRow ? 1 : 0),
+        preview
+      }
     } catch (err: any) {
       console.error('[excel:readHeaders] Error:', err.message)
-      return []
+      return { headers: [], hasHeaderRow: false, totalRows: 0, preview: [] }
     }
   })
 
-  // Import Excel data - inline (no dependency on service file)
+  // Import Excel data - supports files with and without header row
   ipcMain.handle('excel:import', (_event, filePath: string, mapping: any) => {
     try {
       const XLSX = require('xlsx')
       const forcePlatform = (mapping as any).__force_platform__ || ''
+      const hasHeaderRow = (mapping as any).__has_header_row__ !== false
       delete (mapping as any).__force_platform__
+      delete (mapping as any).__has_header_row__
 
       const workbook = XLSX.readFile(filePath)
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json(sheet)
-      if (!rows || rows.length === 0) return { success: 0, failed: 0, errors: ['الملف فارغ'] }
+
+      // Read as raw array of arrays
+      const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as any[][]
+      if (!rawData || rawData.length === 0) return { success: 0, failed: 0, errors: ['الملف فارغ'] }
+
+      // Build headers from first row (or generate)
+      const firstRow = rawData[0] || []
+      const totalCols = Math.max(...rawData.slice(0, 10).map(r => (r || []).length), 0)
+      const headers: string[] = []
+      for (let c = 0; c < totalCols; c++) {
+        const val = firstRow[c] != null ? String(firstRow[c]).trim() : ''
+        headers.push(val || `عمود ${c + 1}`)
+      }
+
+      // Data rows (skip header if exists)
+      const dataStart = hasHeaderRow ? 1 : 0
+      const dataRows = rawData.slice(dataStart)
+      if (dataRows.length === 0) return { success: 0, failed: 0, errors: ['لا توجد بيانات'] }
 
       const { getDatabase } = require('./database/connection')
       const db = getDatabase()
 
-      const getValue = (row: any, field: string): string => {
+      const getValue = (row: any[], field: string): string => {
         for (const [excelCol, dbField] of Object.entries(mapping)) {
-          if (dbField === field) { const v = row[excelCol]; return v != null ? String(v).trim() : '' }
+          if (dbField === field) {
+            const colIdx = headers.indexOf(excelCol)
+            if (colIdx >= 0 && row[colIdx] != null) return String(row[colIdx]).trim()
+          }
         }
         return ''
       }
 
-      // Get custom columns
       let customCols: string[] = []
       try { customCols = db.prepare("SELECT column_name FROM custom_columns WHERE table_name = 'customers'").all().map((r: any) => r.column_name) } catch {}
 
@@ -125,11 +163,14 @@ function registerFileIPC() {
       const errors: string[] = []
 
       const run = db.transaction(() => {
-        for (let i = 0; i < rows.length; i++) {
+        for (let i = 0; i < dataRows.length; i++) {
           try {
-            const row = rows[i]
+            const row = dataRows[i]
+            if (!row || row.every((v: any) => !v || String(v).trim() === '')) continue // skip empty rows
+
             const fullName = getValue(row, 'full_name')
-            if (!fullName) { errors.push(`صف ${i + 2}: اسم الزبون فارغ`); failed++; continue }
+            if (!fullName) { failed++; continue } // skip rows without name silently
+
             const vals = [
               forcePlatform || getValue(row, 'platform_name'), fullName, getValue(row, 'mother_name'),
               getValue(row, 'phone_number'), getValue(row, 'card_number'), getValue(row, 'category'),
@@ -140,7 +181,7 @@ function registerFileIPC() {
             ]
             stmt.run(...vals)
             success++
-          } catch (err: any) { errors.push(`صف ${i + 2}: ${err.message}`); failed++ }
+          } catch (err: any) { errors.push(`صف ${i + dataStart + 1}: ${err.message}`); failed++ }
         }
       })
       run()
