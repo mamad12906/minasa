@@ -25,11 +25,17 @@ export default function Sidebar() {
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null)
   const [updateReady, setUpdateReady] = useState(false)
 
+  const [appVer, setAppVer] = useState('')
   const [online, setOnline] = useState(isOnline())
   const [syncCount, setSyncCount] = useState(getSyncQueueCount())
   const [syncing, setSyncing] = useState(false)
   const isAdmin = user?.role === 'admin'
   const userId = (!isAdmin && user?.id) ? user.id : undefined
+
+  // Load version
+  useEffect(() => {
+    (window as any).__appVersion?.().then((v: string) => { setAppVer(v || ''); (window as any).__appVersionCache = v })
+  }, [])
 
   // Listen for connection and sync changes
   useEffect(() => {
@@ -282,7 +288,8 @@ export default function Sidebar() {
         </div>
         <Button type="text" danger block icon={<LogoutOutlined />} onClick={logout}
           style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12 }}>تسجيل خروج</Button>
-        <div style={{ textAlign: 'center', marginTop: 6, color: 'rgba(255,255,255,0.2)', fontSize: 10 }}>v1.0.6</div>
+        <div style={{ textAlign: 'center', marginTop: 6, color: 'rgba(255,255,255,0.2)', fontSize: 10 }}
+          >v{appVer || '...'}</div>
       </div>
     </Sider>
   )

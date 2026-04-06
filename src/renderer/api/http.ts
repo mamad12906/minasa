@@ -5,14 +5,37 @@ let AUTH_TOKEN = localStorage.getItem('minasa_token') || ''
 let API_KEY = localStorage.getItem('minasa_api_key') || ''
 let IS_ONLINE = true
 
-export function setApiKey(key: string) { API_KEY = key; localStorage.setItem('minasa_api_key', key) }
+// Load persistent config on startup (survives updates)
+export async function loadPersistentConfig() {
+  try {
+    const config = await (window as any).__config?.get()
+    if (config) {
+      if (config.server_url && !BASE_URL) { BASE_URL = config.server_url; localStorage.setItem('minasa_server_url', BASE_URL) }
+      if (config.api_key && !API_KEY) { API_KEY = config.api_key; localStorage.setItem('minasa_api_key', API_KEY) }
+      // Always prefer persistent config
+      if (config.server_url) { BASE_URL = config.server_url; localStorage.setItem('minasa_server_url', BASE_URL) }
+      if (config.api_key) { API_KEY = config.api_key; localStorage.setItem('minasa_api_key', API_KEY) }
+    }
+  } catch {}
+}
+
+export function setApiKey(key: string) {
+  API_KEY = key; localStorage.setItem('minasa_api_key', key)
+  ;(window as any).__config?.set('api_key', key)
+}
 export function getApiKey() { return API_KEY }
-export function setServerUrl(url: string) { BASE_URL = url.replace(/\/+$/, ''); localStorage.setItem('minasa_server_url', BASE_URL) }
+export function setServerUrl(url: string) {
+  BASE_URL = url.replace(/\/+$/, ''); localStorage.setItem('minasa_server_url', BASE_URL)
+  ;(window as any).__config?.set('server_url', BASE_URL)
+}
 export function getServerUrl() { return BASE_URL }
 export function setToken(token: string) { AUTH_TOKEN = token; localStorage.setItem('minasa_token', token) }
 export function clearToken() { AUTH_TOKEN = ''; localStorage.removeItem('minasa_token') }
 export function getToken() { return AUTH_TOKEN }
 export function isOnline() { return IS_ONLINE }
+
+// Load config immediately
+setTimeout(() => loadPersistentConfig(), 100)
 
 // ===== Sync Queue =====
 interface SyncItem {

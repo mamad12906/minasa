@@ -20,6 +20,26 @@ export function registerAllIPC(): void {
     return getDashboardStats(userId)
   })
 
+  // === Persistent Config (survives updates) ===
+  const configPath = require('path').join(require('electron').app.getPath('userData'), 'minasa-config.json')
+  const loadConfig = (): any => {
+    try { return JSON.parse(require('fs').readFileSync(configPath, 'utf-8')) } catch { return {} }
+  }
+  const saveConfig = (data: any) => {
+    try { require('fs').writeFileSync(configPath, JSON.stringify(data, null, 2)) } catch {}
+  }
+
+  ipcMain.handle('config:get', () => loadConfig())
+  ipcMain.handle('config:set', (_event, key: string, value: string) => {
+    const config = loadConfig()
+    config[key] = value
+    saveConfig(config)
+    return { success: true }
+  })
+
+  // App version
+  ipcMain.handle('app:version', () => require('electron').app.getVersion())
+
   // === Audit Log ===
   ipcMain.handle('audit:log', (_event, userId: number, userName: string, action: string, entityType: string, entityId: number, details: string) => {
     logAudit(userId, userName, action, entityType, entityId, details)

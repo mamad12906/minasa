@@ -93,6 +93,14 @@ const syncApi = {
   pullReminders: (data: any[]) => safeInvoke('sync:pull-reminders', data),
 }
 
+// App config (persistent across updates)
+const configApi = {
+  get: () => safeInvoke('config:get').then(r => r || {}),
+  set: (key: string, value: string) => safeInvoke('config:set', key, value),
+}
+contextBridge.exposeInMainWorld('__config', configApi)
+contextBridge.exposeInMainWorld('__appVersion', () => safeInvoke('app:version').then(r => r || ''))
+
 // Direct IPC invoke (for invoice channels not in localApi)
 contextBridge.exposeInMainWorld('__ipcDirect', (channel: string, ...args: any[]) => safeInvoke(channel, ...args))
 
