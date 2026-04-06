@@ -19,6 +19,7 @@ const localApi = {
     platforms: () => safeInvoke('customer:platforms').then(r => r || []),
     categories: () => safeInvoke('customer:categories').then(r => r || []),
     reminders: (customerId: number) => safeInvoke('customer:reminders', customerId).then(r => r || []),
+    history: (customerId: number) => safeInvoke('customer:history', customerId).then(r => r || []),
   },
   dashboard: {
     stats: (userId?: number) => safeInvoke('dashboard:stats', userId),
@@ -91,6 +92,9 @@ const syncApi = {
   pullCategories: (data: any[]) => safeInvoke('sync:pull-categories', data),
   pullReminders: (data: any[]) => safeInvoke('sync:pull-reminders', data),
 }
+
+// Direct IPC invoke (for invoice channels not in localApi)
+contextBridge.exposeInMainWorld('__ipcDirect', (channel: string, ...args: any[]) => safeInvoke(channel, ...args))
 
 // Expose local IPC API
 contextBridge.exposeInMainWorld('__localApi', localApi)

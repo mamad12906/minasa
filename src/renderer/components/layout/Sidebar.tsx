@@ -5,7 +5,8 @@ import {
   DashboardOutlined, UserOutlined, UploadOutlined,
   CrownOutlined, BellOutlined, LogoutOutlined, SaveOutlined,
   CloudDownloadOutlined, MoonOutlined, SunOutlined,
-  WifiOutlined, DisconnectOutlined, SyncOutlined, HistoryOutlined
+  WifiOutlined, DisconnectOutlined, SyncOutlined, HistoryOutlined,
+  DollarOutlined, BarChartOutlined
 } from '@ant-design/icons'
 import { useAuth, useTheme } from '../../App'
 import { isOnline, getSyncQueueCount, processSyncQueue, pullFromServer, getLastSyncTime, isSyncing } from '../../api/http'
@@ -90,6 +91,8 @@ export default function Sidebar() {
   const menuItems = [
     { key: '/', icon: <DashboardOutlined />, label: 'لوحة التحكم' },
     ...(can('customers') ? [{ key: '/customers', icon: <UserOutlined />, label: 'الزبائن' }] : []),
+    ...(can('customers') ? [{ key: '/invoices', icon: <DollarOutlined />, label: 'الفواتير' }] : []),
+    { key: '/reports', icon: <BarChartOutlined />, label: 'التقارير' },
     ...(can('import') ? [{ key: '/import', icon: <UploadOutlined />, label: 'استيراد Excel' }] : []),
     { key: '/backup', icon: <SaveOutlined />, label: 'نسخ احتياطي' },
     ...(user?.role === 'admin' ? [

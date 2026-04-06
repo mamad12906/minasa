@@ -4,8 +4,13 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined, CrownOutlined
 
 const SECTIONS = [
   { key: 'customers', label: 'الزبائن' },
+  { key: 'invoices', label: 'الفواتير' },
+  { key: 'reports', label: 'التقارير' },
   { key: 'import', label: 'استيراد Excel' },
   { key: 'export', label: 'تصدير Excel' },
+  { key: 'backup', label: 'النسخ الاحتياطي' },
+  { key: 'edit_customer', label: 'تعديل زبون' },
+  { key: 'delete_customer', label: 'حذف زبون' },
 ]
 
 export default function AdminPanel() {

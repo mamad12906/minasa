@@ -179,10 +179,19 @@ export function getDashboardStats(userId?: number) {
     SELECT * FROM customers ${filter} ORDER BY created_at DESC LIMIT 10
   `).all(...params) as any[]
 
+  // Employee stats (admin only - no userId filter)
+  const employeeStats = !userId ? db.prepare(`
+    SELECT u.id, u.display_name, COUNT(c.id) as customer_count
+    FROM users u LEFT JOIN customers c ON c.user_id = u.id
+    WHERE u.role != 'admin'
+    GROUP BY u.id ORDER BY customer_count DESC
+  `).all() as any[] : []
+
   return {
     totalCustomers: customers.count,
     categoryBreakdown,
     ministryBreakdown,
+    employeeStats,
     recentCustomers
   }
 }

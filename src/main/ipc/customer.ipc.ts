@@ -6,6 +6,7 @@ import {
   syncCustomerReminder, getCustomerReminders, postponeReminder, reReminder,
   createReminder
 } from '../database/customers'
+import { logAudit } from '../database/audit'
 
 function addMonthsToDate(dateStr: string, months: number): string {
   const d = new Date(dateStr)
@@ -19,30 +20,52 @@ export function registerCustomerIPC(): void {
 
   ipcMain.handle('customer:create', (_event, input) => {
     const customer = createCustomer(input)
-
-    // Manual reminder
     if (input.reminder_date && input.reminder_text) {
       syncCustomerReminder(customer.id, input.reminder_date, input.reminder_text)
     }
-
-    // Auto-reminder: 2 months before months_count expires
     if (input.months_count && input.months_count > 2) {
-      const startDate = customer.created_at.split(' ')[0] // YYYY-MM-DD
+      const startDate = customer.created_at.split(' ')[0]
       const reminderDate = addMonthsToDate(startDate, input.months_count - 2)
-      createReminder(customer.id, reminderDate, `تنبيه: باقي شهرين على انتهاء مدة ${input.months_count} شهر`)
+      createReminder(customer.id, reminderDate, `تذكير تلقائي - انتهاء المدة ${addMonthsToDate(startDate, input.months_count)}`)
     }
-
+    logAudit(input.user_id || 0, '', 'إضافة', 'customer', customer.id, `إضافة زبون: ${customer.full_name}`)
     return customer
   })
 
   ipcMain.handle('customer:update', (_event, id: number, input) => {
+    const old = getCustomer(id)
     const customer = updateCustomer(id, input)
     syncCustomerReminder(id, input.reminder_date || '', input.reminder_text || '')
+    // Log changes
+    const changes: string[] = []
+    if (old) {
+      if (old.full_name !== input.full_name) changes.push(`الاسم: ${old.full_name} → ${input.full_name}`)
+      if (old.phone_number !== input.phone_number) changes.push(`الهاتف: ${old.phone_number} → ${input.phone_number}`)
+      if (old.category !== input.category) changes.push(`الصنف: ${old.category} → ${input.category}`)
+      if (old.ministry_name !== input.ministry_name) changes.push(`الوزارة: ${old.ministry_name} → ${input.ministry_name}`)
+      if (old.status_note !== input.status_note) changes.push(`الحالة: ${old.status_note} → ${input.status_note}`)
+      if (old.platform_name !== input.platform_name) changes.push(`المنصة: ${old.platform_name} → ${input.platform_name}`)
+      if (String(old.months_count) !== String(input.months_count)) changes.push(`الأشهر: ${old.months_count} → ${input.months_count}`)
+      if (old.user_id !== input.user_id) changes.push(`نقل لموظف آخر`)
+    }
+    logAudit(input.user_id || 0, '', 'تعديل', 'customer', id, changes.length > 0 ? changes.join(' | ') : `تعديل زبون: ${customer.full_name}`)
     return customer
   })
 
   ipcMain.handle('customer:delete', (_event, id: number) => {
-    deleteCustomer(id); return { success: true }
+    const old = getCustomer(id)
+    deleteCustomer(id)
+    logAudit(0, '', 'حذف', 'customer', id, `حذف زبون: ${old?.full_name || id}`)
+    return { success: true }
+  })
+
+  // Customer edit history from audit log
+  ipcMain.handle('customer:history', (_event, customerId: number) => {
+    try {
+      const { getDatabase } = require('../database/connection')
+      const db = getDatabase()
+      return db.prepare("SELECT * FROM audit_log WHERE entity_type = 'customer' AND entity_id = ? ORDER BY created_at DESC").all(customerId)
+    } catch { return [] }
   })
 
   ipcMain.handle('customer:platforms', () => getDistinctPlatforms())

@@ -14,6 +14,8 @@ import AddCustomer from './components/customers/AddCustomer'
 import EditCustomer from './components/customers/EditCustomer'
 import LoginPage from './components/admin/LoginPage'
 import AuditLog from './components/admin/AuditLog'
+import InvoicePage from './components/invoices/InvoicePage'
+import ReportsPage from './components/reports/ReportsPage'
 
 // Expose api globally for all components
 ;(window as any).api = api
@@ -108,7 +110,9 @@ export default function App() {
                       {can('customers') && <Route path="customers" element={<CustomerTable />} />}
                       {can('customers') && <Route path="add-customer" element={<AddCustomer />} />}
                       {can('customers') && <Route path="edit-customer/:id" element={<EditCustomer />} />}
-                      {can('import') && <Route path="import" element={<ExcelImport />} />}
+                      {can('customers') && <Route path="invoices" element={<InvoicePage />} />}
+                    <Route path="reports" element={<ReportsPage />} />
+                    {can('import') && <Route path="import" element={<ExcelImport />} />}
                       <Route path="backup" element={<BackupPage />} />
                       {user.role === 'admin' && <Route path="admin" element={<AdminPanel />} />}
                       {user.role === 'admin' && <Route path="audit" element={<AuditLog />} />}

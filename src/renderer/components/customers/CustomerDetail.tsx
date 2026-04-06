@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Drawer, Descriptions, Tag, Spin, Divider, Timeline, Empty, Button, Modal, Form, Input, Select, DatePicker, Checkbox, message } from 'antd'
-import { BellOutlined, CheckCircleOutlined, ClockCircleOutlined, SwapOutlined, CalendarOutlined } from '@ant-design/icons'
+import { BellOutlined, CheckCircleOutlined, ClockCircleOutlined, SwapOutlined, CalendarOutlined, PrinterOutlined, HistoryOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { Customer, CustomColumn } from '../../types'
 import { useAuth } from '../../App'
@@ -23,9 +23,50 @@ export default function CustomerDetail({ customer, onClose, customColumns, onRef
   const [transferModal, setTransferModal] = useState(false)
   const [transferPlatform, setTransferPlatform] = useState('')
   const [platforms, setPlatforms] = useState<any[]>([])
+  const [history, setHistory] = useState<any[]>([])
 
   useEffect(() => { if (isAdmin) window.api.platforms.list().then(setPlatforms).catch(() => {}) }, [])
-  useEffect(() => { if (customer) loadReminders() }, [customer])
+  useEffect(() => {
+    if (customer) { loadReminders(); loadHistory() }
+  }, [customer])
+
+  const loadHistory = async () => {
+    if (!customer) return
+    try {
+      const h = await (window as any).__localApi?.customer?.history(customer.id)
+      setHistory(h || [])
+    } catch { setHistory([]) }
+  }
+
+  const printCard = () => {
+    if (!customer) return
+    const endDate = customer.months_count && customer.created_at
+      ? dayjs(customer.created_at).add(customer.months_count, 'month').format('YYYY-MM-DD') : '-'
+    const w = window.open('', '_blank', 'width=600,height=800')
+    if (!w) return
+    w.document.write(`<html dir="rtl"><head><title>بطاقة زبون</title>
+      <style>body{font-family:'Segoe UI',Tahoma,Arial;padding:30px;color:#1A2332}
+      h1{text-align:center;color:#1B6B93;border-bottom:3px solid #1B6B93;padding-bottom:10px}
+      table{width:100%;border-collapse:collapse;margin-top:20px}
+      td,th{padding:10px 14px;border:1px solid #E2E8F0;text-align:right}
+      th{background:#F0F4F7;font-weight:600;width:35%}
+      .f{text-align:center;margin-top:30px;color:#94A3B8;font-size:12px}</style></head><body>
+      <h1>بطاقة زبون - منصة</h1><table>
+      <tr><th>الاسم</th><td>${customer.full_name}</td></tr>
+      <tr><th>اسم الأم</th><td>${customer.mother_name || '-'}</td></tr>
+      <tr><th>الهاتف</th><td>${customer.phone_number || '-'}</td></tr>
+      <tr><th>البطاقة</th><td>${customer.card_number || '-'}</td></tr>
+      <tr><th>المنصة</th><td>${customer.platform_name || '-'}</td></tr>
+      <tr><th>الوزارة</th><td>${customer.ministry_name || '-'}</td></tr>
+      <tr><th>الصنف</th><td>${customer.category || '-'}</td></tr>
+      <tr><th>الحالة</th><td>${customer.status_note || '-'}</td></tr>
+      <tr><th>الأشهر</th><td>${customer.months_count || '-'}</td></tr>
+      <tr><th>الانتهاء</th><td>${endDate}</td></tr>
+      <tr><th>ملاحظات</th><td>${customer.notes || '-'}</td></tr>
+      </table><div class="f">طُبعت ${dayjs().format('YYYY-MM-DD')} | منصة</div></body></html>`)
+    w.document.close()
+    setTimeout(() => w.print(), 500)
+  }
 
   const loadReminders = async () => {
     if (!customer) return
@@ -58,11 +99,10 @@ export default function CustomerDetail({ customer, onClose, customColumns, onRef
     <Drawer title="تفاصيل الزبون" open={!!customer} onClose={onClose} width={650} placement="left">
       {customer && (
         <div style={{ overflow: 'auto' }}>
-          {isAdmin && (
-            <Button icon={<SwapOutlined />} onClick={() => setTransferModal(true)} style={{ marginBottom: 12, borderRadius: 8 }}>
-              نقل إلى منصة أخرى
-            </Button>
-          )}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <Button icon={<PrinterOutlined />} onClick={printCard} style={{ borderRadius: 8 }}>طباعة بطاقة</Button>
+            {isAdmin && <Button icon={<SwapOutlined />} onClick={() => setTransferModal(true)} style={{ borderRadius: 8 }}>نقل لمنصة أخرى</Button>}
+          </div>
 
           <Descriptions bordered column={1} size="small">
             <Descriptions.Item label="الاسم الرباعي">{customer.full_name}</Descriptions.Item>
@@ -95,6 +135,27 @@ export default function CustomerDetail({ customer, onClose, customColumns, onRef
             <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--info)', fontSize: 13 }}>ملاحظات</div>
             <div style={{ whiteSpace: 'pre-wrap', color: 'var(--text-primary)', fontSize: 13 }}>{customer.notes || 'لا توجد ملاحظات'}</div>
           </div>
+
+          {/* Edit History */}
+          {history.length > 0 && (
+            <>
+              <Divider><HistoryOutlined /> سجل التعديلات</Divider>
+              <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                {history.map((h: any) => (
+                  <div key={h.id} style={{
+                    padding: '8px 12px', marginBottom: 6, borderRadius: 8,
+                    background: 'var(--bg-card-hover)', border: '1px solid var(--border-light)', fontSize: 12
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Tag color={h.action === 'إضافة' ? 'green' : h.action === 'حذف' ? 'red' : 'blue'} style={{ fontSize: 11 }}>{h.action}</Tag>
+                      <span style={{ color: 'var(--text-muted)' }}>{dayjs(h.created_at).format('YYYY-MM-DD hh:mm A')}</span>
+                    </div>
+                    {h.details && <div style={{ color: 'var(--text-secondary)', marginTop: 4 }}>{h.details}</div>}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
 
           <Divider><BellOutlined /> سجل التذكيرات</Divider>
 
