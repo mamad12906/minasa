@@ -6,6 +6,13 @@ export interface Customer {
   phone_number: string
   card_number: string
   category: string
+  ministry_name: string
+  status_note: string
+  months_count: number
+  notes: string
+  user_id: number
+  reminder_date: string
+  reminder_text: string
   created_at: string
   updated_at: string
   [key: string]: any // custom columns
@@ -27,6 +34,42 @@ export interface CustomerInput {
   phone_number: string
   card_number: string
   category: string
+  ministry_name?: string
+  status_note?: string
+  months_count?: number
+  notes?: string
+  user_id?: number
+  reminder_date?: string
+  reminder_text?: string
+}
+
+export interface Reminder {
+  id: number
+  customer_id: number
+  reminder_date: string
+  reminder_text: string
+  is_done: number
+  handled_by: string
+  handled_at: string
+  is_postponed: number
+  postpone_reason: string
+  original_date: string
+  handle_method: string
+  created_at: string
+  full_name?: string
+  phone_number?: string
+  ministry_name?: string
+}
+
+export interface UserData {
+  id: number
+  username: string
+  display_name: string
+  role: string
+  permissions: string
+  platform_name: string
+  customer_count?: number
+  created_at: string
 }
 
 export interface Invoice {
@@ -45,16 +88,6 @@ export interface Invoice {
   platform_name?: string
 }
 
-export interface InvoiceInput {
-  customer_id: number
-  invoice_number: string
-  total_months: number
-  total_amount: number
-  monthly_deduction: number
-  creation_date: string
-  status: string
-}
-
 export interface Payment {
   id: number
   invoice_id: number
@@ -65,12 +98,14 @@ export interface Payment {
   created_at: string
 }
 
-export interface PaymentInput {
-  invoice_id: number
-  payment_date: string
-  amount: number
-  month_number: number
-  notes: string
+export interface Platform {
+  id: number
+  name: string
+}
+
+export interface Category {
+  id: number
+  name: string
 }
 
 export interface PaginatedResult<T> {
@@ -82,14 +117,10 @@ export interface PaginatedResult<T> {
 
 export interface DashboardStats {
   totalCustomers: number
-  activeInvoices: number
-  totalRevenue: number
-  totalAmount: number
-  overdueInvoices: number
-  completedInvoices: number
-  statusBreakdown: { status: string; count: number }[]
   categoryBreakdown: { category: string; count: number }[]
-  recentInvoices: any[]
+  ministryBreakdown: { ministry_name: string; count: number }[]
+  employeeStats: { id: number; display_name: string; customer_count: number }[]
+  recentCustomers: Customer[]
 }
 
 declare global {
@@ -98,50 +129,39 @@ declare global {
       customer: {
         list: (params: any) => Promise<PaginatedResult<Customer>>
         get: (id: number) => Promise<Customer>
-        create: (input: CustomerInput) => Promise<Customer>
-        update: (id: number, input: CustomerInput) => Promise<Customer>
+        create: (input: any) => Promise<Customer>
+        update: (id: number, input: any) => Promise<Customer>
         delete: (id: number) => Promise<{ success: boolean }>
         platforms: () => Promise<string[]>
         categories: () => Promise<string[]>
-        reminders: (customerId: number) => Promise<any[]>
-      }
-      invoice: {
-        list: (params: any) => Promise<PaginatedResult<Invoice>>
-        get: (id: number) => Promise<Invoice>
-        create: (input: InvoiceInput) => Promise<Invoice>
-        update: (id: number, input: InvoiceInput) => Promise<Invoice>
-        delete: (id: number) => Promise<{ success: boolean }>
-        payments: (invoiceId: number) => Promise<Payment[]>
-      }
-      payment: {
-        create: (input: PaymentInput) => Promise<Payment>
-        delete: (id: number) => Promise<{ success: boolean }>
+        reminders: (customerId: number) => Promise<Reminder[]>
       }
       dashboard: {
-        stats: () => Promise<DashboardStats>
-      }
-      excel: {
-        selectFile: () => Promise<string | null>
-        readHeaders: (filePath: string) => Promise<string[]>
-        importData: (filePath: string, mapping: any) => Promise<{ success: number; failed: number; errors: string[] }>
-        exportCustomers: (filters: any) => Promise<string | null>
+        stats: (userId?: number) => Promise<DashboardStats>
       }
       reminders: {
-        active: () => Promise<any[]>
-        all: () => Promise<any[]>
+        active: (userId?: number) => Promise<Reminder[]>
+        all: (userId?: number) => Promise<Reminder[]>
         done: (id: number, handledBy: string, handleMethod: string) => Promise<{ success: boolean }>
         postpone: (id: number, newDate: string, reason: string) => Promise<{ success: boolean }>
         reremind: (id: number, newDate: string, reason: string) => Promise<{ success: boolean }>
         delete: (id: number) => Promise<{ success: boolean }>
       }
+      users: {
+        login: (username: string, password: string) => Promise<UserData | null>
+        list: () => Promise<UserData[]>
+        create: (username: string, password: string, displayName: string, role: string, permissions: string, platformName: string) => Promise<UserData>
+        update: (id: number, displayName: string, password: string | null, permissions: string, platformName: string) => Promise<UserData>
+        delete: (id: number) => Promise<{ success: boolean }>
+      }
       platforms: {
-        list: () => Promise<{ id: number; name: string }[]>
-        add: (name: string) => Promise<{ success?: boolean; error?: string }>
+        list: () => Promise<Platform[]>
+        add: (name: string) => Promise<any>
         delete: (id: number) => Promise<{ success: boolean }>
       }
       categories: {
-        list: () => Promise<{ id: number; name: string }[]>
-        add: (name: string) => Promise<{ success?: boolean; error?: string }>
+        list: () => Promise<Category[]>
+        add: (name: string) => Promise<any>
         delete: (id: number) => Promise<{ success: boolean }>
       }
       transfer: {
@@ -150,15 +170,23 @@ declare global {
       columns: {
         list: (tableName?: string) => Promise<CustomColumn[]>
         add: (input: { display_name: string; column_type: string; table_name: string }) => Promise<CustomColumn>
-        update: (id: number, display_name: string) => Promise<CustomColumn>
+        update: (id: number, displayName: string) => Promise<CustomColumn>
         delete: (id: number) => Promise<{ success: boolean }>
       }
-      users: {
-        login: (username: string, password: string) => Promise<any>
-        list: () => Promise<any[]>
-        create: (username: string, password: string, displayName: string, role: string, permissions: string) => Promise<any>
-        update: (id: number, displayName: string, password: string | null, permissions: string) => Promise<any>
-        delete: (id: number) => Promise<{ success: boolean }>
+      excel: {
+        selectFile: () => Promise<string | null>
+        readHeaders: (filePath: string) => Promise<string[]>
+        importData: (filePath: string, mapping: any) => Promise<{ success: number; failed: number; errors: string[] }>
+      }
+      backup: {
+        database: () => Promise<string | null>
+        restore: () => Promise<{ success: boolean; message?: string } | null>
+        excelAll: () => Promise<string | null>
+        excelUser: (userId: number, userName: string) => Promise<string | null>
+        autoSetup: (dir: string, hours: number) => Promise<{ success: boolean }>
+        autoStop: () => Promise<{ success: boolean }>
+        autoGet: () => Promise<{ dir: string; hours: number }>
+        selectDir: () => Promise<string | null>
       }
     }
   }

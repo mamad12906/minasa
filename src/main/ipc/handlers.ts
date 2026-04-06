@@ -1,5 +1,6 @@
 import { ipcMain, Notification, BrowserWindow } from 'electron'
 import { registerCustomerIPC } from './customer.ipc'
+import { registerInvoiceIPC } from './invoice.ipc'
 import { registerExcelIPC } from './excel.ipc'
 import { registerColumnsIPC } from './columns.ipc'
 import { registerUsersIPC } from './users.ipc'
@@ -10,6 +11,7 @@ import { getActiveReminders } from '../database/customers'
 
 export function registerAllIPC(): void {
   registerCustomerIPC()
+  registerInvoiceIPC()
   registerExcelIPC()
   registerColumnsIPC()
   registerUsersIPC()
