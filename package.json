@@ -1,6 +1,6 @@
 {
   "name": "minasa",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Customer & Invoice Management System",
   "main": "./out/main/index.js",
   "scripts": {

@@ -15,10 +15,29 @@ export interface ColumnMapping {
 export function readExcelHeaders(filePath: string): string[] {
   const workbook = XLSX.readFile(filePath)
   const sheetName = workbook.SheetNames[0]
+  if (!sheetName) return []
   const sheet = workbook.Sheets[sheetName]
-  const data = XLSX.utils.sheet_to_json<any>(sheet, { header: 1 })
-  if (data.length === 0) return []
-  return (data[0] as any[]).map(h => String(h || '').trim()).filter(h => h.length > 0)
+  if (!sheet) return []
+
+  // Try header: 1 first (raw rows)
+  const data = XLSX.utils.sheet_to_json<any>(sheet, { header: 1, defval: '' })
+  if (!data || data.length === 0) return []
+
+  // Find first non-empty row as headers (skip empty rows at top)
+  for (let i = 0; i < Math.min(data.length, 5); i++) {
+    const row = data[i] as any[]
+    if (!row) continue
+    const headers = row.map(h => String(h || '').trim()).filter(h => h.length > 0)
+    if (headers.length >= 2) return headers // at least 2 columns = valid header row
+  }
+
+  // Fallback: use sheet_to_json keys
+  const jsonData = XLSX.utils.sheet_to_json<any>(sheet)
+  if (jsonData.length > 0) {
+    return Object.keys(jsonData[0]).filter(k => k && k !== '__EMPTY')
+  }
+
+  return []
 }
 
 export function readExcelData(filePath: string): any[] {

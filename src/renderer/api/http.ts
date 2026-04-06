@@ -440,19 +440,19 @@ export const api = {
   },
 
   excel: {
-    selectFile: () => local().excel.selectFile(),
-    readHeaders: (filePath: string) => local().excel.readHeaders(filePath),
-    importData: (filePath: string, mapping: any) => local().excel.importData(filePath, mapping),
+    selectFile: () => hasLocal() ? local().excel.selectFile() : Promise.resolve(null),
+    readHeaders: (filePath: string) => hasLocal() ? local().excel.readHeaders(filePath) : Promise.resolve([]),
+    importData: (filePath: string, mapping: any) => hasLocal() ? local().excel.importData(filePath, mapping) : Promise.resolve({ success: 0, failed: 0, errors: ['القاعدة المحلية غير متوفرة'] }),
   },
 
   backup: {
-    database: () => local().backup.database(),
-    restore: () => local().backup.restore(),
-    excelAll: () => local().backup.excelAll(),
-    excelUser: (userId: number, userName: string) => local().backup.excelUser(userId, userName),
-    autoSetup: (dir: string, hours: number) => local().backup.autoSetup(dir, hours),
-    autoStop: () => local().backup.autoStop(),
-    autoGet: () => local().backup.autoGet(),
-    selectDir: () => local().backup.selectDir(),
+    database: () => hasLocal() ? local().backup.database() : Promise.resolve(null),
+    restore: () => hasLocal() ? local().backup.restore() : Promise.resolve(null),
+    excelAll: () => hasLocal() ? local().backup.excelAll() : Promise.resolve(null),
+    excelUser: (userId: number, userName: string) => hasLocal() ? local().backup.excelUser(userId, userName) : Promise.resolve(null),
+    autoSetup: (dir: string, hours: number) => hasLocal() ? local().backup.autoSetup(dir, hours) : Promise.resolve({ success: false }),
+    autoStop: () => hasLocal() ? local().backup.autoStop() : Promise.resolve({ success: false }),
+    autoGet: () => hasLocal() ? local().backup.autoGet() : Promise.resolve({ dir: '', hours: 0 }),
+    selectDir: () => hasLocal() ? local().backup.selectDir() : Promise.resolve(null),
   },
 }
