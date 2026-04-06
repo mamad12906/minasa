@@ -35,28 +35,7 @@ function createWindow(): void {
   }
 }
 
-// File dialog IPC handlers
-function registerFileIPC() {
-  ipcMain.handle('excel:selectFile', async (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    const result = await dialog.showOpenDialog(win!, {
-      properties: ['openFile'],
-      filters: [{ name: 'Excel', extensions: ['xlsx', 'xls', 'csv'] }]
-    })
-    if (result.canceled || result.filePaths.length === 0) return null
-    return result.filePaths[0]
-  })
-
-  ipcMain.handle('backup:select-dir', async (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    const result = await dialog.showOpenDialog(win!, {
-      properties: ['openDirectory'],
-      title: 'اختر مجلد'
-    })
-    if (result.canceled || result.filePaths.length === 0) return null
-    return result.filePaths[0]
-  })
-}
+// No extra file IPC needed - all handled by registerAllIPC -> excel.ipc.ts
 
 // Auto-updater
 function setupAutoUpdater() {
@@ -87,49 +66,28 @@ function setupAutoUpdater() {
     console.error('Auto-updater error:', err)
   })
 
-  ipcMain.handle('updater:check', () => {
-    autoUpdater.checkForUpdates().catch(() => {})
-  })
+  ipcMain.handle('updater:check', () => { autoUpdater.checkForUpdates().catch(() => {}) })
+  ipcMain.handle('updater:download', () => { autoUpdater.downloadUpdate().catch(() => {}) })
+  ipcMain.handle('updater:install', () => { autoUpdater.quitAndInstall() })
 
-  ipcMain.handle('updater:download', () => {
-    autoUpdater.downloadUpdate().catch(() => {})
-  })
-
-  ipcMain.handle('updater:install', () => {
-    autoUpdater.quitAndInstall()
-  })
-
-  setInterval(() => {
-    autoUpdater.checkForUpdates().catch(() => {})
-  }, 30 * 60 * 1000)
-
-  setTimeout(() => {
-    autoUpdater.checkForUpdates().catch(() => {})
-  }, 10000)
+  setInterval(() => { autoUpdater.checkForUpdates().catch(() => {}) }, 30 * 60 * 1000)
+  setTimeout(() => { autoUpdater.checkForUpdates().catch(() => {}) }, 10000)
 }
 
-// Try to activate local SQLite IPC (may fail on some systems)
+// Register all local IPC (SQLite + excel + backup)
 function tryRegisterLocalIPC() {
   try {
     const { registerAllIPC } = require('./ipc/handlers')
     registerAllIPC()
     console.log('Local SQLite IPC registered successfully')
-    // Tell renderer that local DB is available
-    if (mainWindow) {
-      mainWindow.webContents.on('did-finish-load', () => {
-        mainWindow?.webContents.send('local-db-ready', true)
-      })
-    }
   } catch (err) {
-    console.error('Failed to register local IPC (SQLite not available):', err)
-    // App will work in online-only mode
+    console.error('Failed to register local IPC:', err)
   }
 }
 
 app.whenReady().then(() => {
-  registerFileIPC()
-  createWindow()
   tryRegisterLocalIPC()
+  createWindow()
   setupAutoUpdater()
 
   app.on('activate', () => {
