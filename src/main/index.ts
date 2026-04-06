@@ -91,12 +91,60 @@ function registerFileIPC() {
     }
   })
 
-  // Import Excel data
+  // Import Excel data - inline (no dependency on service file)
   ipcMain.handle('excel:import', (_event, filePath: string, mapping: any) => {
     try {
-      const { importExcelData } = require('./services/excel.service')
-      const result = importExcelData(filePath, mapping)
-      return { success: Number(result.success) || 0, failed: Number(result.failed) || 0, errors: result.errors.map(String) }
+      const XLSX = require('xlsx')
+      const forcePlatform = (mapping as any).__force_platform__ || ''
+      delete (mapping as any).__force_platform__
+
+      const workbook = XLSX.readFile(filePath)
+      const sheet = workbook.Sheets[workbook.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(sheet)
+      if (!rows || rows.length === 0) return { success: 0, failed: 0, errors: ['الملف فارغ'] }
+
+      const { getDatabase } = require('./database/connection')
+      const db = getDatabase()
+
+      const getValue = (row: any, field: string): string => {
+        for (const [excelCol, dbField] of Object.entries(mapping)) {
+          if (dbField === field) { const v = row[excelCol]; return v != null ? String(v).trim() : '' }
+        }
+        return ''
+      }
+
+      // Get custom columns
+      let customCols: string[] = []
+      try { customCols = db.prepare("SELECT column_name FROM custom_columns WHERE table_name = 'customers'").all().map((r: any) => r.column_name) } catch {}
+
+      const baseFields = ['platform_name', 'full_name', 'mother_name', 'phone_number', 'card_number', 'category', 'ministry_name', 'status_note', 'reminder_date', 'reminder_text', 'user_id', 'months_count', 'notes']
+      const allFields = [...baseFields, ...customCols]
+      const stmt = db.prepare(`INSERT INTO customers (${allFields.join(', ')}) VALUES (${allFields.map(() => '?').join(', ')})`)
+
+      let success = 0, failed = 0
+      const errors: string[] = []
+
+      const run = db.transaction(() => {
+        for (let i = 0; i < rows.length; i++) {
+          try {
+            const row = rows[i]
+            const fullName = getValue(row, 'full_name')
+            if (!fullName) { errors.push(`صف ${i + 2}: اسم الزبون فارغ`); failed++; continue }
+            const vals = [
+              forcePlatform || getValue(row, 'platform_name'), fullName, getValue(row, 'mother_name'),
+              getValue(row, 'phone_number'), getValue(row, 'card_number'), getValue(row, 'category'),
+              getValue(row, 'ministry_name'), getValue(row, 'status_note'), getValue(row, 'reminder_date'),
+              getValue(row, 'reminder_text'), parseInt(getValue(row, 'user_id')) || 0,
+              parseInt(getValue(row, 'months_count')) || 0, getValue(row, 'notes'),
+              ...customCols.map(c => getValue(row, c))
+            ]
+            stmt.run(...vals)
+            success++
+          } catch (err: any) { errors.push(`صف ${i + 2}: ${err.message}`); failed++ }
+        }
+      })
+      run()
+      return { success, failed, errors }
     } catch (err: any) {
       console.error('[excel:import] Error:', err.message)
       return { success: 0, failed: 0, errors: [String(err?.message || err)] }
@@ -226,21 +274,62 @@ function registerFileIPC() {
     } catch (err: any) { console.error('[backup:excel-user]', err.message); return null }
   })
 
-  // Auto-backup settings
-  ipcMain.handle('backup:auto-setup', async (_event, dirPath: string, intervalHours: number) => {
+  // Auto-backup with interval
+  let autoBackupInterval: any = null
+
+  const doAutoBackup = (dir: string) => {
     try {
-      const { getDatabase } = require('./database/connection')
-      const db = getDatabase()
-      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('auto_backup_dir', ?)").run(dirPath)
-      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('auto_backup_hours', ?)").run(String(intervalHours))
+      const fs = require('fs')
+      const dbPath = path.join(app.getPath('userData'), 'minasa.db')
+      if (!fs.existsSync(dbPath)) return
+      try { const { getDatabase } = require('./database/connection'); getDatabase().pragma('wal_checkpoint(TRUNCATE)') } catch {}
+      const date = new Date().toISOString().split('T')[0]
+      const time = new Date().toTimeString().split(' ')[0].replace(/:/g, '-')
+      fs.copyFileSync(dbPath, path.join(dir, `minasa-auto-${date}_${time}.db`))
+      console.log('[auto-backup] Done')
+    } catch (e: any) { console.error('[auto-backup] Error:', e.message) }
+  }
+
+  const startAutoBackup = (dir: string, hours: number) => {
+    if (autoBackupInterval) clearInterval(autoBackupInterval)
+    if (dir && hours > 0) {
+      doAutoBackup(dir) // First backup now
+      autoBackupInterval = setInterval(() => doAutoBackup(dir), hours * 60 * 60 * 1000)
+    }
+  }
+
+  ipcMain.handle('backup:auto-setup', async (event, dirPath: string, intervalHours: number) => {
+    try {
+      // Save to persistent config
+      const configPath = path.join(app.getPath('userData'), 'minasa-config.json')
+      let config: any = {}
+      try { config = JSON.parse(require('fs').readFileSync(configPath, 'utf-8')) } catch {}
+      config.auto_backup_dir = dirPath
+      config.auto_backup_hours = intervalHours
+      require('fs').writeFileSync(configPath, JSON.stringify(config, null, 2))
+      // Also save to DB settings if available
+      try {
+        const { getDatabase } = require('./database/connection')
+        const db = getDatabase()
+        db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('auto_backup_dir', ?)").run(dirPath)
+        db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('auto_backup_hours', ?)").run(String(intervalHours))
+      } catch {}
+      startAutoBackup(dirPath, intervalHours)
       return { success: true }
     } catch { return { success: false } }
   })
 
   ipcMain.handle('backup:auto-stop', () => {
+    if (autoBackupInterval) { clearInterval(autoBackupInterval); autoBackupInterval = null }
     try {
-      const { getDatabase } = require('./database/connection')
-      const db = getDatabase()
+      const configPath = path.join(app.getPath('userData'), 'minasa-config.json')
+      let config: any = {}
+      try { config = JSON.parse(require('fs').readFileSync(configPath, 'utf-8')) } catch {}
+      delete config.auto_backup_dir; delete config.auto_backup_hours
+      require('fs').writeFileSync(configPath, JSON.stringify(config, null, 2))
+    } catch {}
+    try {
+      const { getDatabase } = require('./database/connection'); const db = getDatabase()
       db.prepare("DELETE FROM settings WHERE key = 'auto_backup_dir'").run()
       db.prepare("DELETE FROM settings WHERE key = 'auto_backup_hours'").run()
     } catch {}
@@ -248,14 +337,32 @@ function registerFileIPC() {
   })
 
   ipcMain.handle('backup:auto-get', () => {
+    // Try persistent config first
     try {
-      const { getDatabase } = require('./database/connection')
-      const db = getDatabase()
+      const configPath = path.join(app.getPath('userData'), 'minasa-config.json')
+      const config = JSON.parse(require('fs').readFileSync(configPath, 'utf-8'))
+      if (config.auto_backup_dir) return { dir: config.auto_backup_dir, hours: config.auto_backup_hours || 0 }
+    } catch {}
+    // Fallback to DB
+    try {
+      const { getDatabase } = require('./database/connection'); const db = getDatabase()
       const dir = db.prepare("SELECT value FROM settings WHERE key = 'auto_backup_dir'").get() as any
       const hours = db.prepare("SELECT value FROM settings WHERE key = 'auto_backup_hours'").get() as any
       return { dir: dir?.value || '', hours: Number(hours?.value) || 0 }
     } catch { return { dir: '', hours: 0 } }
   })
+
+  // Start auto-backup from saved settings on launch
+  setTimeout(() => {
+    try {
+      const configPath = path.join(app.getPath('userData'), 'minasa-config.json')
+      const config = JSON.parse(require('fs').readFileSync(configPath, 'utf-8'))
+      if (config.auto_backup_dir && config.auto_backup_hours > 0) {
+        startAutoBackup(config.auto_backup_dir, config.auto_backup_hours)
+        console.log('[auto-backup] Started from config:', config.auto_backup_dir, 'every', config.auto_backup_hours, 'hours')
+      }
+    } catch {}
+  }, 5000)
 }
 
 // ===== SQLite IPC (may fail on some systems) =====
