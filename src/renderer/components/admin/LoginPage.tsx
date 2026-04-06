@@ -78,7 +78,11 @@ export default function LoginPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <Input prefix={<GlobalOutlined style={{ color: 'var(--text-muted)' }} />}
                     value={serverUrlInput} onChange={e => setServerUrlInput(e.target.value)}
-                    placeholder="رابط السيرفر" style={{ borderRadius: 10 }} />
+                    placeholder="https://example.com" style={{ borderRadius: 10 }}
+                    status={serverUrlInput && !serverUrlInput.startsWith('https') && !serverUrlInput.includes('localhost') ? 'warning' : undefined} />
+                  {serverUrlInput && !serverUrlInput.startsWith('https') && !serverUrlInput.includes('localhost') && !serverUrlInput.includes('192.168') && (
+                    <div style={{ fontSize: 11, color: '#D29922' }}>يُنصح باستخدام HTTPS لحماية البيانات</div>
+                  )}
                   <Input.Password prefix={<LockOutlined style={{ color: 'var(--text-muted)' }} />}
                     value={apiKeyInput} onChange={e => setApiKeyInput(e.target.value)}
                     placeholder="مفتاح API" style={{ borderRadius: 10 }} />

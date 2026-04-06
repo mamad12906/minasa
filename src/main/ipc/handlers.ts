@@ -1,10 +1,12 @@
-import { ipcMain } from 'electron'
+import { ipcMain, Notification, BrowserWindow } from 'electron'
 import { registerCustomerIPC } from './customer.ipc'
 import { registerExcelIPC } from './excel.ipc'
 import { registerColumnsIPC } from './columns.ipc'
 import { registerUsersIPC } from './users.ipc'
 import { getDashboardStats } from '../database/invoices'
 import { getDatabase } from '../database/connection'
+import { logAudit, getAuditLog } from '../database/audit'
+import { getActiveReminders } from '../database/customers'
 
 export function registerAllIPC(): void {
   registerCustomerIPC()
@@ -15,6 +17,40 @@ export function registerAllIPC(): void {
   ipcMain.handle('dashboard:stats', (_event, userId?: number) => {
     return getDashboardStats(userId)
   })
+
+  // === Audit Log ===
+  ipcMain.handle('audit:log', (_event, userId: number, userName: string, action: string, entityType: string, entityId: number, details: string) => {
+    logAudit(userId, userName, action, entityType, entityId, details)
+    return { success: true }
+  })
+
+  ipcMain.handle('audit:list', (_event, params: any) => {
+    return getAuditLog(params)
+  })
+
+  // === Desktop Notifications for Reminders ===
+  function checkAndNotifyReminders() {
+    try {
+      const reminders = getActiveReminders()
+      if (reminders && reminders.length > 0) {
+        const notification = new Notification({
+          title: `منصة - ${reminders.length} تذكير مستحق`,
+          body: reminders.slice(0, 3).map((r: any) => `${r.full_name}: ${r.reminder_text}`).join('\n'),
+          silent: false
+        })
+        notification.show()
+        notification.on('click', () => {
+          const win = BrowserWindow.getAllWindows()[0]
+          if (win) { win.show(); win.focus() }
+        })
+      }
+    } catch { /* ignore */ }
+  }
+
+  // Check reminders every 10 minutes
+  setInterval(checkAndNotifyReminders, 10 * 60 * 1000)
+  // First check after 30 seconds
+  setTimeout(checkAndNotifyReminders, 30000)
 
   // === Sync: Pull all data from server into local DB ===
   ipcMain.handle('sync:pull-customers', (_event, customers: any[]) => {

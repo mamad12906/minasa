@@ -1,4 +1,5 @@
 import { getDatabase } from './connection'
+import bcrypt from 'bcryptjs'
 
 export interface User {
   id: number
@@ -13,26 +14,48 @@ export interface User {
 
 export function loginUser(username: string, password: string): User | null {
   const db = getDatabase()
-  return db.prepare('SELECT * FROM users WHERE username = ? AND password = ?').get(username, password) as User || null
+  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as User | undefined
+  if (!user) return null
+
+  // Support both hashed and plain passwords (migration)
+  if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
+    // Hashed password
+    if (bcrypt.compareSync(password, user.password)) return user
+    return null
+  } else {
+    // Plain text (legacy) - migrate to hashed
+    if (user.password === password) {
+      const hashed = bcrypt.hashSync(password, 10)
+      db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashed, user.id)
+      return user
+    }
+    return null
+  }
 }
 
-export function listUsers(): User[] {
+export function listUsers(): (Omit<User, 'password'> & { customer_count: number })[] {
   const db = getDatabase()
-  return db.prepare('SELECT * FROM users ORDER BY created_at ASC').all() as User[]
+  return db.prepare(`
+    SELECT u.id, u.username, u.display_name, u.role, u.permissions, u.platform_name, u.created_at,
+      (SELECT COUNT(*) FROM customers c WHERE c.user_id = u.id) as customer_count
+    FROM users u ORDER BY u.created_at ASC
+  `).all() as any[]
 }
 
 export function createUser(username: string, password: string, displayName: string, role: string, permissions: string, platformName: string): User {
   const db = getDatabase()
+  const hashed = bcrypt.hashSync(password, 10)
   const result = db.prepare('INSERT INTO users (username, password, display_name, role, permissions, platform_name) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(username, password, displayName, role, permissions, platformName || '')
+    .run(username, hashed, displayName, role, permissions, platformName || '')
   return db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid as number) as User
 }
 
 export function updateUser(id: number, displayName: string, password: string | null, permissions: string, platformName: string): User {
   const db = getDatabase()
   if (password) {
+    const hashed = bcrypt.hashSync(password, 10)
     db.prepare('UPDATE users SET display_name = ?, password = ?, permissions = ?, platform_name = ? WHERE id = ?')
-      .run(displayName, password, permissions, platformName || '', id)
+      .run(displayName, hashed, permissions, platformName || '', id)
   } else {
     db.prepare('UPDATE users SET display_name = ?, permissions = ?, platform_name = ? WHERE id = ?')
       .run(displayName, permissions, platformName || '', id)
@@ -61,7 +84,7 @@ export function deletePlatform(id: number) {
   db.prepare('DELETE FROM platforms WHERE id = ?').run(id)
 }
 
-// Categories (admin-managed)
+// Categories
 export function listCategories(): { id: number; name: string }[] {
   const db = getDatabase()
   return db.prepare('SELECT * FROM categories ORDER BY name ASC').all() as any[]

@@ -3,9 +3,11 @@ import { Card, Button, message, Row, Col, Tag, InputNumber, Modal } from 'antd'
 import {
   DatabaseOutlined, FileExcelOutlined, SaveOutlined, CheckCircleOutlined,
   CloudUploadOutlined, FolderOpenOutlined, ClockCircleOutlined, StopOutlined,
-  ExclamationCircleOutlined, ReloadOutlined
+  ExclamationCircleOutlined, ReloadOutlined, FilePdfOutlined
 } from '@ant-design/icons'
 import { useAuth } from '../../App'
+import { jsPDF } from 'jspdf'
+import 'jspdf-autotable'
 
 export default function BackupPage() {
   const { user } = useAuth()
@@ -55,6 +57,40 @@ export default function BackupPage() {
 
   const stopAuto = async () => {
     await window.api.backup.autoStop(); message.success('تم إيقاف النسخ التلقائي'); loadAutoSettings()
+  }
+
+  const exportPDF = async () => {
+    setLoading('pdf')
+    try {
+      const res = await window.api.customer.list({ page: 1, pageSize: 10000 })
+      const customers = res?.data || []
+      if (customers.length === 0) { message.warning('لا توجد بيانات'); setLoading(null); return }
+
+      const doc = new jsPDF({ orientation: 'landscape', putOnlyUsedFonts: true })
+      // Use built-in font (no Arabic shaping, but works for numbers/latin)
+      doc.setFontSize(12)
+      doc.text(`Minasa - Customer Report (${new Date().toLocaleDateString()})`, 14, 15)
+      doc.text(`Total: ${customers.length}`, 14, 22)
+
+      const headers = [['#', 'Name', 'Phone', 'Card', 'Ministry', 'Category', 'Platform', 'Created']]
+      const rows = customers.map((c: any, i: number) => [
+        i + 1, c.full_name || '', c.phone_number || '', c.card_number || '',
+        c.ministry_name || '', c.category || '', c.platform_name || '',
+        c.created_at?.split(' ')[0] || ''
+      ])
+
+      ;(doc as any).autoTable({
+        head: headers, body: rows, startY: 28,
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [27, 107, 147] },
+      })
+
+      doc.save(`minasa-report-${new Date().toISOString().split('T')[0]}.pdf`)
+      message.success('تم تصدير PDF بنجاح')
+    } catch (err: any) {
+      message.error('خطأ في تصدير PDF: ' + err.message)
+    }
+    setLoading(null)
   }
 
   const iconBox = (bg: string): React.CSSProperties => ({
@@ -121,6 +157,17 @@ export default function BackupPage() {
               <Button type="primary" size="large" loading={loading === 'user-export'}
                 onClick={() => action('user-export', () => window.api.backup.excelUser(user?.id || 0, user?.display_name || ''))}
                 style={{ borderRadius: 8, minWidth: 150 }}><FileExcelOutlined /> تصدير زبائني</Button>
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={8}>
+          <Card hoverable className="backup-card" style={{ borderRadius: 14, border: '1px solid var(--border-light)', height: '100%', background: 'var(--bg-card)', boxShadow: 'var(--shadow-card)' }}>
+            <div style={{ textAlign: 'center', padding: '12px 0' }}>
+              <div className="backup-icon" style={iconBox('#CF222E')}><FilePdfOutlined /></div>
+              <h3 style={{ color: 'var(--text-primary)', marginBottom: 4 }}>تصدير تقرير PDF</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 12 }}>تقرير بجميع الزبائن</p>
+              <Button type="primary" size="large" loading={loading === 'pdf'} onClick={exportPDF}
+                style={{ borderRadius: 8, minWidth: 150, background: '#CF222E', borderColor: '#CF222E' }}><FilePdfOutlined /> تصدير PDF</Button>
             </div>
           </Card>
         </Col>

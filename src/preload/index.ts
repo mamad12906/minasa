@@ -76,6 +76,13 @@ const localApi = {
   },
 }
 
+// Audit log
+const auditApi = {
+  log: (userId: number, userName: string, action: string, entityType: string, entityId: number, details: string) =>
+    safeInvoke('audit:log', userId, userName, action, entityType, entityId, details),
+  list: (params: any) => safeInvoke('audit:list', params).then(r => r || { data: [], total: 0 }),
+}
+
 // Sync operations
 const syncApi = {
   pullCustomers: (data: any[]) => safeInvoke('sync:pull-customers', data),
@@ -88,6 +95,7 @@ const syncApi = {
 // Expose local IPC API
 contextBridge.exposeInMainWorld('__localApi', localApi)
 contextBridge.exposeInMainWorld('__syncApi', syncApi)
+contextBridge.exposeInMainWorld('__auditApi', auditApi)
 
 // Legacy IPC (for backward compat)
 contextBridge.exposeInMainWorld('__ipc', {

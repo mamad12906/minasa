@@ -129,9 +129,28 @@ export function getDatabase(): Database.Database {
   // Create default admin if not exists
   const adminExists = db.prepare("SELECT id FROM users WHERE role = 'admin'").get()
   if (!adminExists) {
+    let bcrypt: any
+    try { bcrypt = require('bcryptjs') } catch {}
+    const hashedPw = bcrypt ? bcrypt.hashSync('admin', 10) : 'admin'
     db.prepare("INSERT INTO users (username, password, display_name, role, permissions, platform_name) VALUES (?, ?, ?, ?, ?, ?)")
-      .run('admin', 'admin', 'مدير النظام', 'admin', '{}', '')
+      .run('admin', hashedPw, 'مدير النظام', 'admin', '{}', '')
   }
+
+  // Audit log table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER DEFAULT 0,
+      user_name TEXT DEFAULT '',
+      action TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id INTEGER DEFAULT 0,
+      details TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    )
+  `)
+  db.exec('CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at)')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id)')
 
   // Initialize custom columns metadata table
   db.exec(`

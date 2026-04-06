@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Table, Button, Input, Space, Popconfirm, message, Select, Row, Col, Tag } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, EyeOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, EyeOutlined, TeamOutlined, UserOutlined, FilterOutlined, SaveOutlined, ClearOutlined } from '@ant-design/icons'
 import type { Customer, CustomColumn } from '../../types'
 import CustomerForm from './CustomerForm'
 import CustomerDetail from './CustomerDetail'
@@ -27,6 +27,9 @@ export default function CustomerTable() {
   const [customColumns, setCustomColumns] = useState<CustomColumn[]>([])
   const [allUsers, setAllUsers] = useState<any[]>([])
   const [filterUserId, setFilterUserId] = useState<number | undefined>()
+  const [savedFilters, setSavedFilters] = useState<{ name: string; search: string; platform?: string; category?: string; userId?: number }[]>(() => {
+    try { return JSON.parse(localStorage.getItem('minasa_saved_filters') || '[]') } catch { return [] }
+  })
 
   const isAdmin = user?.role === 'admin'
   const effectiveUserId = isAdmin ? filterUserId : user?.id
@@ -137,7 +140,7 @@ export default function CustomerTable() {
           </Col>
         </Row>
 
-        <Row gutter={[12, 12]} style={{ marginBottom: 20 }}>
+        <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
           <Col xs={24} sm={10}>
             <Input placeholder="بحث بالاسم أو الهاتف أو البطاقة..." prefix={<SearchOutlined />}
               value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} allowClear />
@@ -157,6 +160,38 @@ export default function CustomerTable() {
             </Col>
           )}
         </Row>
+        {/* Save/Load Filters */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Button size="small" icon={<SaveOutlined />} onClick={() => {
+            const name = prompt('اسم الفلتر:')
+            if (!name) return
+            const f = { name, search, platform: platform || '', category: category || '', userId: filterUserId }
+            const updated = [...savedFilters.filter(s => s.name !== name), f]
+            setSavedFilters(updated)
+            localStorage.setItem('minasa_saved_filters', JSON.stringify(updated))
+            message.success(`تم حفظ الفلتر "${name}"`)
+          }} disabled={!search && !platform && !category && !filterUserId}>
+            حفظ الفلتر
+          </Button>
+          <Button size="small" icon={<ClearOutlined />} onClick={() => {
+            setSearch(''); setPlatform(undefined); setCategory(undefined); setFilterUserId(undefined); setPage(1)
+          }}>مسح الفلاتر</Button>
+          {savedFilters.map(f => (
+            <Tag key={f.name} closable color="blue" style={{ cursor: 'pointer', fontSize: 12 }}
+              onClick={() => {
+                setSearch(f.search || ''); setPlatform(f.platform || undefined)
+                setCategory(f.category || undefined); setFilterUserId(f.userId); setPage(1)
+              }}
+              onClose={(e) => {
+                e.preventDefault()
+                const updated = savedFilters.filter(s => s.name !== f.name)
+                setSavedFilters(updated)
+                localStorage.setItem('minasa_saved_filters', JSON.stringify(updated))
+              }}>
+              <FilterOutlined /> {f.name}
+            </Tag>
+          ))}
+        </div>
 
         <Table dataSource={customers} columns={[...baseColumns, ...dynamicColumns, actionColumn]}
           rowKey="id" loading={loading} size="middle" scroll={{ x: 800 + customColumns.length * 150 }}

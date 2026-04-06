@@ -5,7 +5,7 @@ import {
   DashboardOutlined, UserOutlined, UploadOutlined,
   CrownOutlined, BellOutlined, LogoutOutlined, SaveOutlined,
   CloudDownloadOutlined, MoonOutlined, SunOutlined,
-  WifiOutlined, DisconnectOutlined, SyncOutlined
+  WifiOutlined, DisconnectOutlined, SyncOutlined, HistoryOutlined
 } from '@ant-design/icons'
 import { useAuth, useTheme } from '../../App'
 import { isOnline, getSyncQueueCount, processSyncQueue, pullFromServer, getLastSyncTime, isSyncing } from '../../api/http'
@@ -92,7 +92,10 @@ export default function Sidebar() {
     ...(can('customers') ? [{ key: '/customers', icon: <UserOutlined />, label: 'الزبائن' }] : []),
     ...(can('import') ? [{ key: '/import', icon: <UploadOutlined />, label: 'استيراد Excel' }] : []),
     { key: '/backup', icon: <SaveOutlined />, label: 'نسخ احتياطي' },
-    ...(user?.role === 'admin' ? [{ key: '/admin', icon: <CrownOutlined />, label: 'لوحة الأدمن' }] : [])
+    ...(user?.role === 'admin' ? [
+      { key: '/admin', icon: <CrownOutlined />, label: 'لوحة الأدمن' },
+      { key: '/audit', icon: <HistoryOutlined />, label: 'سجل التغييرات' }
+    ] : [])
   ]
 
   const bellContent = (
