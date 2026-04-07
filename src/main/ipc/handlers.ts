@@ -1,7 +1,6 @@
 import { ipcMain, Notification, BrowserWindow } from 'electron'
 import { registerCustomerIPC } from './customer.ipc'
 import { registerInvoiceIPC } from './invoice.ipc'
-import { registerExcelIPC } from './excel.ipc'
 import { registerColumnsIPC } from './columns.ipc'
 import { registerUsersIPC } from './users.ipc'
 import { getDashboardStats } from '../database/invoices'
@@ -12,7 +11,6 @@ import { getActiveReminders } from '../database/customers'
 export function registerAllIPC(): void {
   registerCustomerIPC()
   registerInvoiceIPC()
-  registerExcelIPC()
   registerColumnsIPC()
   registerUsersIPC()
 
@@ -78,23 +76,29 @@ export function registerAllIPC(): void {
   ipcMain.handle('sync:pull-customers', (_event, customers: any[]) => {
     if (!customers || !Array.isArray(customers)) return { success: false }
     const db = getDatabase()
-    const insert = db.transaction(() => {
+    const checkDup = db.prepare('SELECT id FROM customers WHERE full_name = ? AND mother_name = ? AND phone_number = ? AND created_at = ?')
+    const insert = db.prepare(`
+      INSERT INTO customers (platform_name, full_name, mother_name, phone_number, card_number, category, ministry_name, status_note, months_count, notes, user_id, reminder_date, reminder_text, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    let added = 0, skipped = 0
+    const run = db.transaction(() => {
       for (const c of customers) {
-        // Use INSERT OR REPLACE to handle duplicates
-        db.prepare(`
-          INSERT OR REPLACE INTO customers (id, platform_name, full_name, mother_name, phone_number, card_number, category, ministry_name, status_note, months_count, notes, user_id, reminder_date, reminder_text, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          c.id, c.platform_name || '', c.full_name || '', c.mother_name || '',
+        const exists = checkDup.get(c.full_name || '', c.mother_name || '', c.phone_number || '', c.created_at || '')
+        if (exists) { skipped++; continue }
+        insert.run(
+          c.platform_name || '', c.full_name || '', c.mother_name || '',
           c.phone_number || '', c.card_number || '', c.category || '',
           c.ministry_name || '', c.status_note || '', c.months_count || 0,
           c.notes || '', c.user_id || 0, c.reminder_date || '', c.reminder_text || '',
           c.created_at || '', c.updated_at || ''
         )
+        added++
       }
     })
-    insert()
-    return { success: true, count: customers.length }
+    run()
+    console.log('[sync:pull-customers] Added:', added, 'Skipped:', skipped)
+    return { success: true, count: added, skipped }
   })
 
   ipcMain.handle('sync:pull-users', (_event, users: any[]) => {
@@ -142,21 +146,28 @@ export function registerAllIPC(): void {
   ipcMain.handle('sync:pull-reminders', (_event, reminders: any[]) => {
     if (!reminders || !Array.isArray(reminders)) return { success: false }
     const db = getDatabase()
-    const insert = db.transaction(() => {
+    const checkDup = db.prepare('SELECT id FROM reminders WHERE customer_id = ? AND reminder_date = ? AND reminder_text = ?')
+    const insert = db.prepare(`
+      INSERT INTO reminders (customer_id, reminder_date, reminder_text, is_done, handled_by, handled_at, is_postponed, postpone_reason, original_date, handle_method, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    let added = 0, skipped = 0
+    const run = db.transaction(() => {
       for (const r of reminders) {
-        db.prepare(`
-          INSERT OR REPLACE INTO reminders (id, customer_id, reminder_date, reminder_text, is_done, handled_by, handled_at, is_postponed, postpone_reason, original_date, handle_method, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          r.id, r.customer_id, r.reminder_date || '', r.reminder_text || '',
+        const exists = checkDup.get(r.customer_id, r.reminder_date || '', r.reminder_text || '')
+        if (exists) { skipped++; continue }
+        insert.run(
+          r.customer_id, r.reminder_date || '', r.reminder_text || '',
           r.is_done || 0, r.handled_by || '', r.handled_at || '',
           r.is_postponed || 0, r.postpone_reason || '', r.original_date || '',
           r.handle_method || '', r.created_at || ''
         )
+        added++
       }
     })
-    insert()
-    return { success: true, count: reminders.length }
+    run()
+    console.log('[sync:pull-reminders] Added:', added, 'Skipped:', skipped)
+    return { success: true, count: added, skipped }
   })
 
   ipcMain.handle('sync:get-last-sync', () => {

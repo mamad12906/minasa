@@ -355,6 +355,131 @@ function registerFileIPC() {
     } catch (err: any) { console.error('[backup:excel-user]', err.message); return null }
   })
 
+  // ===== Full Sync: runs entirely in main process =====
+  ipcMain.handle('sync:full', async (_event, serverUrl: string, token: string, apiKey: string) => {
+    console.log('[sync:full] START')
+    if (!serverUrl) return { success: false, details: 'لا يوجد رابط سيرفر' }
+
+    const https = require('https')
+    const http = require('http')
+    const results: string[] = []
+
+    const doGet = (urlPath: string): Promise<any> => {
+      return new Promise((resolve) => {
+        const headers: any = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
+        if (apiKey) headers['x-api-key'] = apiKey
+        const req = (serverUrl.startsWith('https') ? https : http).request(`${serverUrl}${urlPath}`, { method: 'GET', headers }, (res: any) => {
+          let d = ''; res.on('data', (c: any) => d += c)
+          res.on('end', () => { try { resolve(JSON.parse(d)) } catch { resolve(null) } })
+        })
+        req.on('error', () => resolve(null))
+        req.end()
+      })
+    }
+
+    const doPost = (urlPath: string, body: any): Promise<any> => {
+      return new Promise((resolve) => {
+        const headers: any = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
+        if (apiKey) headers['x-api-key'] = apiKey
+        const req = (serverUrl.startsWith('https') ? https : http).request(`${serverUrl}${urlPath}`, { method: 'POST', headers }, (res: any) => {
+          let d = ''; res.on('data', (c: any) => d += c)
+          res.on('end', () => { try { resolve(JSON.parse(d)) } catch { resolve(null) } })
+        })
+        req.on('error', () => resolve(null))
+        req.write(JSON.stringify(body))
+        req.end()
+      })
+    }
+
+    try {
+      const { getDatabase } = require('./database/connection')
+      const db = getDatabase()
+
+      // Step 1: Get local customers
+      const localCustomers = db.prepare('SELECT * FROM customers').all() as any[]
+      console.log('[sync:full] Local:', localCustomers.length)
+
+      // Step 2: Get server customers (paginated)
+      let serverCustomers: any[] = []
+      let sPage = 1
+      while (true) {
+        const sRes = await doGet(`/api/customers?page=${sPage}&pageSize=200`)
+        const sData = sRes?.data || []
+        if (sData.length === 0) break
+        serverCustomers.push(...sData)
+        if (serverCustomers.length >= (sRes.total || 0)) break
+        sPage++
+      }
+      console.log('[sync:full] Server:', serverCustomers.length)
+
+      // Step 3: Push local-only to server
+      const serverSet = new Set(serverCustomers.map((c: any) =>
+        `${(c.full_name || '').trim()}|${(c.mother_name || '').trim()}|${(c.phone_number || '').trim()}`
+      ))
+      let pushed = 0
+      for (const c of localCustomers) {
+        const key = `${(c.full_name || '').trim()}|${(c.mother_name || '').trim()}|${(c.phone_number || '').trim()}`
+        if (!serverSet.has(key)) {
+          await doPost('/api/customers', c)
+          pushed++
+        }
+      }
+      if (pushed > 0) results.push(`رُفع ${pushed} جديد`)
+      console.log('[sync:full] Pushed:', pushed)
+
+      // Step 4: Clear local and download fresh from server (paginated)
+      db.exec('DELETE FROM customers')
+      const stmt = db.prepare(`INSERT INTO customers (platform_name, full_name, mother_name, phone_number, card_number, category, ministry_name, status_note, months_count, notes, user_id, reminder_date, reminder_text, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+
+      let totalInserted = 0
+      let page = 1
+      while (true) {
+        const pageRes = await doGet(`/api/customers?page=${page}&pageSize=200`)
+        const pageData = pageRes?.data || []
+        if (pageData.length === 0) break
+
+        const insertBatch = db.transaction(() => {
+          for (const c of pageData) {
+            stmt.run(
+              c.platform_name || '', c.full_name || '', c.mother_name || '',
+              c.phone_number || '', c.card_number || '', c.category || '',
+              c.ministry_name || '', c.status_note || '', c.months_count || 0,
+              c.notes || '', c.user_id || 0, c.reminder_date || '', c.reminder_text || '',
+              c.created_at || '', c.updated_at || ''
+            )
+          }
+        })
+        insertBatch()
+        totalInserted += pageData.length
+        console.log('[sync:full] Page', page, ':', pageData.length, 'total:', totalInserted)
+
+        if (totalInserted >= (pageRes.total || 0)) break
+        page++
+      }
+      if (totalInserted > 0) results.push(`${totalInserted} زبون محلياً`)
+
+      // Step 6: Sync users
+      try {
+        const users = await doGet('/api/users')
+        if (Array.isArray(users) && users.length > 0) {
+          for (const u of users) {
+            db.prepare('INSERT OR REPLACE INTO users (id, username, password, display_name, role, permissions, platform_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+              .run(u.id, u.username || '', u.password || 'synced', u.display_name || '', u.role || 'user', u.permissions || '{}', u.platform_name || '', u.created_at || '')
+          }
+          results.push(`${users.length} مستخدم`)
+        }
+      } catch {}
+
+      console.log('[sync:full] DONE:', results.join(', '))
+      return { success: true, details: results.length > 0 ? results.join(' | ') : 'لا توجد بيانات جديدة' }
+    } catch (err: any) {
+      console.error('[sync:full] ERROR:', err.message)
+      return { success: false, details: err.message }
+    }
+  })
+
   // Fast server request helper
   const serverRequest = (method: string, serverUrl: string, urlPath: string, token: string, apiKey: string): Promise<any> => {
     const https = require('https'); const http = require('http')

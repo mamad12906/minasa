@@ -8,12 +8,6 @@ function safeInvoke(channel: string, ...args: any[]) {
   })
 }
 
-// Debug: log all IPC calls
-const debugInvoke = (channel: string, ...args: any[]) => {
-  console.log(`[IPC] ${channel}`, args.length > 0 ? args[0]?.constructor?.name || typeof args[0] : '')
-  return safeInvoke(channel, ...args)
-}
-
 // Full IPC API for local SQLite operations
 const localApi = {
   customer: {
@@ -90,15 +84,6 @@ const auditApi = {
   list: (params: any) => safeInvoke('audit:list', params).then(r => r || { data: [], total: 0 }),
 }
 
-// Sync operations
-const syncApi = {
-  pullCustomers: (data: any[]) => safeInvoke('sync:pull-customers', data),
-  pullUsers: (data: any[]) => safeInvoke('sync:pull-users', data),
-  pullPlatforms: (data: any[]) => safeInvoke('sync:pull-platforms', data),
-  pullCategories: (data: any[]) => safeInvoke('sync:pull-categories', data),
-  pullReminders: (data: any[]) => safeInvoke('sync:pull-reminders', data),
-}
-
 // App config (persistent across updates)
 const configApi = {
   get: () => safeInvoke('config:get').then(r => r || {}),
@@ -134,14 +119,7 @@ contextBridge.exposeInMainWorld('__ipc2', {
 
 // Expose local IPC API
 contextBridge.exposeInMainWorld('__localApi', localApi)
-contextBridge.exposeInMainWorld('__syncApi', syncApi)
 contextBridge.exposeInMainWorld('__auditApi', auditApi)
-
-// Legacy IPC (for backward compat)
-contextBridge.exposeInMainWorld('__ipc', {
-  excel: localApi.excel,
-  backup: localApi.backup,
-})
 
 // Updater
 contextBridge.exposeInMainWorld('__updater', {

@@ -14,6 +14,7 @@ import AddCustomer from './components/customers/AddCustomer'
 import EditCustomer from './components/customers/EditCustomer'
 import LoginPage from './components/admin/LoginPage'
 import AuditLog from './components/admin/AuditLog'
+import WhatsAppPage from './components/messaging/WhatsAppPage'
 import DatabaseManager from './components/admin/DatabaseManager'
 import InvoicePage from './components/invoices/InvoicePage'
 import ReportsPage from './components/reports/ReportsPage'
@@ -91,7 +92,8 @@ export default function App() {
                       {can('customers') && <Route path="add-customer" element={<AddCustomer />} />}
                       {can('customers') && <Route path="edit-customer/:id" element={<EditCustomer />} />}
                       {can('customers') && <Route path="invoices" element={<InvoicePage />} />}
-                    <Route path="reports" element={<ReportsPage />} />
+                    {can('reports') && <Route path="reports" element={<ReportsPage />} />}
+                    <Route path="whatsapp" element={<WhatsAppPage />} />
                     {can('import') && <Route path="import" element={<ExcelImport />} />}
                       <Route path="backup" element={<BackupPage />} />
                       {user.role === 'admin' && <Route path="admin" element={<AdminPanel />} />}

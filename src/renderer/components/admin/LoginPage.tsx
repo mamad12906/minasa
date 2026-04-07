@@ -3,7 +3,7 @@ import { Form, Input, Button, message, Tag, Tooltip, Select, Progress, Modal } f
 import {
   UserOutlined, LockOutlined, GlobalOutlined,
   MoonOutlined, SunOutlined, WifiOutlined, DisconnectOutlined,
-  CheckCircleOutlined, CloseCircleOutlined, InfoCircleOutlined,
+  CheckCircleOutlined, CloseCircleOutlined,
   CloudDownloadOutlined, SkinOutlined, LoginOutlined
 } from '@ant-design/icons'
 import { useAuth, useTheme } from '../../App'

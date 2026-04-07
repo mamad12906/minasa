@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Badge, Popover, Button, Empty, Tag, Progress, Modal, message } from 'antd'
+import { Layout, Menu, Badge, Popover, Button, Empty, Tag, Progress, Modal } from 'antd'
 import {
   DashboardOutlined, UserOutlined, UploadOutlined,
   CrownOutlined, BellOutlined, LogoutOutlined, SaveOutlined,
   CloudDownloadOutlined, MoonOutlined, SunOutlined,
-  WifiOutlined, DisconnectOutlined, SyncOutlined, HistoryOutlined,
-  DollarOutlined, BarChartOutlined, DatabaseOutlined
+  WifiOutlined, DisconnectOutlined, HistoryOutlined,
+  DollarOutlined, BarChartOutlined, DatabaseOutlined, WhatsAppOutlined
 } from '@ant-design/icons'
 import { useAuth, useTheme } from '../../App'
-import { isOnline, getSyncQueueCount, processSyncQueue, pullFromServer, getLastSyncTime, isSyncing } from '../../api/http'
+import { isOnline } from '../../api/http'
 
 const { Sider } = Layout
 const updater = (window as any).__updater
@@ -27,8 +27,6 @@ export default function Sidebar() {
 
   const [appVer, setAppVer] = useState('')
   const [online, setOnline] = useState(isOnline())
-  const [syncCount, setSyncCount] = useState(getSyncQueueCount())
-  const [syncing, setSyncing] = useState(false)
   const isAdmin = user?.role === 'admin'
   const userId = (!isAdmin && user?.id) ? user.id : undefined
 
@@ -37,30 +35,11 @@ export default function Sidebar() {
     (window as any).__appVersion?.().then((v: string) => { setAppVer(v || ''); (window as any).__appVersionCache = v })
   }, [])
 
-  // Listen for connection and sync changes
+  // Check connection
   useEffect(() => {
-    const interval = setInterval(() => {
-      setOnline(isOnline())
-      setSyncCount(getSyncQueueCount())
-    }, 3000)
-    const onSync = (e: any) => { setSyncCount(getSyncQueueCount()) }
-    window.addEventListener('sync-queue-changed', onSync)
-    window.addEventListener('sync-completed', onSync)
-    return () => { clearInterval(interval); window.removeEventListener('sync-queue-changed', onSync); window.removeEventListener('sync-completed', onSync) }
+    const interval = setInterval(() => setOnline(isOnline()), 5000)
+    return () => clearInterval(interval)
   }, [])
-
-  const handleManualSync = async () => {
-    setSyncing(true)
-    // First push pending changes
-    const pushResult = await processSyncQueue()
-    if (pushResult.synced > 0) message.success(`تم رفع ${pushResult.synced} عملية`)
-    // Then pull fresh data from server
-    const pullResult = await pullFromServer()
-    setSyncing(false)
-    setSyncCount(getSyncQueueCount())
-    if (pullResult.success) message.success(pullResult.details)
-    else if (pullResult.details) message.warning(pullResult.details)
-  }
 
   useEffect(() => {
     if (!updater) return
@@ -99,6 +78,7 @@ export default function Sidebar() {
     ...(can('customers') ? [{ key: '/customers', icon: <UserOutlined />, label: 'الزبائن' }] : []),
     ...(can('customers') ? [{ key: '/invoices', icon: <DollarOutlined />, label: 'الفواتير' }] : []),
     { key: '/reports', icon: <BarChartOutlined />, label: 'التقارير' },
+    { key: '/whatsapp', icon: <WhatsAppOutlined />, label: 'واتساب' },
     ...(can('import') ? [{ key: '/import', icon: <UploadOutlined />, label: 'استيراد Excel' }] : []),
     { key: '/backup', icon: <SaveOutlined />, label: 'نسخ احتياطي' },
     ...(user?.role === 'admin' ? [
@@ -266,21 +246,13 @@ export default function Sidebar() {
         )}
 
         {/* Connection Status */}
-        <div style={{ marginBottom: 8, textAlign: 'center' }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            fontSize: 11, color: online ? 'rgba(45,164,78,0.9)' : 'rgba(207,34,46,0.9)',
-            marginBottom: 4
-          }}>
-            {online ? <WifiOutlined /> : <DisconnectOutlined />}
-            <span>{online ? 'متصل' : 'غير متصل'}</span>
-            {syncCount > 0 && <Tag color="warning" style={{ fontSize: 10, padding: '0 4px', margin: 0 }}>{syncCount} معلّق</Tag>}
-          </div>
-          <Button type="text" size="small" icon={<SyncOutlined spin={syncing} />}
-            onClick={handleManualSync} disabled={syncing}
-            style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, padding: '0 6px', height: 'auto' }}>
-            {syncing ? 'جاري المزامنة...' : 'مزامنة'}
-          </Button>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          marginBottom: 8, fontSize: 11,
+          color: online ? 'rgba(45,164,78,0.9)' : 'rgba(207,34,46,0.9)'
+        }}>
+          {online ? <WifiOutlined /> : <DisconnectOutlined />}
+          <span>{online ? 'متصل' : 'غير متصل'}</span>
         </div>
 
         <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, marginBottom: 8, textAlign: 'center' }}>
