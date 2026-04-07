@@ -106,16 +106,16 @@ setTimeout(() => checkConnection(), 2000)
 // ===== Hybrid API: try server, fallback to local =====
 
 async function hybridRead(serverFn: () => Promise<any>, localFn: () => Promise<any>) {
-  // Try local first (has imported/synced data)
+  // If online, try server first (always has latest data)
+  if (IS_ONLINE && BASE_URL) {
+    try { return await serverFn() } catch { IS_ONLINE = false }
+  }
+  // Offline: fallback to local
   if (hasLocal()) {
     try {
       const localResult = await localFn()
       if (localResult != null) return localResult
-    } catch { /* local failed */ }
-  }
-  // Fallback to server
-  if (IS_ONLINE && BASE_URL) {
-    try { return await serverFn() } catch { IS_ONLINE = false }
+    } catch {}
   }
   return null
 }
