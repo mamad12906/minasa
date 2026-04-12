@@ -90,11 +90,14 @@ router.post('/', async (req: AuthRequest, res) => {
     await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)', [customer.id, input.reminder_date, input.reminder_text])
   }
 
-  if (input.months_count && input.months_count > 2) {
+  if (input.months_count && input.months_count > 0) {
     const startDate = customer.created_at.toISOString().split('T')[0]
-    const reminderDate = addMonths(startDate, input.months_count - 2)
+    const endDate = addMonths(startDate, input.months_count)
+    const reminderBefore = input.reminder_before || 2
+    const reminderDate = input.reminder_date || addMonths(startDate, Math.max(input.months_count - reminderBefore, 0))
+    const reminderText = input.reminder_text || `تذكير: انتهاء المدة (${input.months_count} شهر) بتاريخ ${endDate}`
     await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)',
-      [customer.id, reminderDate, `تنبيه: باقي شهرين على انتهاء مدة ${input.months_count} شهر`])
+      [customer.id, reminderDate, reminderText])
   }
 
   res.json(customer)

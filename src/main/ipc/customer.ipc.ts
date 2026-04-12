@@ -23,10 +23,13 @@ export function registerCustomerIPC(): void {
     if (input.reminder_date && input.reminder_text) {
       syncCustomerReminder(customer.id, input.reminder_date, input.reminder_text)
     }
-    if (input.months_count && input.months_count > 2) {
+    if (input.months_count && input.months_count > 0) {
       const startDate = customer.created_at.split(' ')[0]
-      const reminderDate = addMonthsToDate(startDate, input.months_count - 2)
-      createReminder(customer.id, reminderDate, `تذكير تلقائي - انتهاء المدة ${addMonthsToDate(startDate, input.months_count)}`)
+      const endDate = addMonthsToDate(startDate, input.months_count)
+      const reminderBefore = input.reminder_before || 2
+      const reminderDate = input.reminder_date || addMonthsToDate(startDate, Math.max(input.months_count - reminderBefore, 0))
+      const reminderText = input.reminder_text || `تذكير: انتهاء المدة (${input.months_count} شهر) بتاريخ ${endDate}`
+      createReminder(customer.id, reminderDate, reminderText)
     }
     logAudit(input.user_id || 0, '', 'إضافة', 'customer', customer.id, `إضافة زبون: ${customer.full_name}`)
     return customer
