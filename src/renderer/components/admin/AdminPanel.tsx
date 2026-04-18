@@ -187,13 +187,14 @@ export default function AdminPanel() {
       { label: 'الأدمن',              value: admins.toString(),     tone: 'accent' as const,  icon: 'crown' as IconName },
       { label: 'المنصات',             value: platforms.length.toString(), tone: 'brand' as const, icon: 'layers' as IconName },
       { label: 'الأصناف',             value: adminCategories.length.toString(), tone: 'info' as const, icon: 'tag' as IconName },
+      { label: 'الوزارات',            value: ministries.length.toString(), tone: 'violet' as const, icon: 'building' as IconName },
     ]
-  }, [users, platforms, adminCategories])
+  }, [users, platforms, adminCategories, ministries])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* ===== KPI row ===== */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
         {kpis.map((k, i) => {
           const toneBg = (k.tone === 'brand' || k.tone === 'accent') ? `var(--${k.tone}-tint)` : `var(--${k.tone}-bg)`
           return (
