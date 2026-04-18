@@ -58,6 +58,26 @@ router.post('/:id/reremind', async (req, res) => {
   res.json({ success: true })
 })
 
+// Update reminder (date + text)
+router.put('/:id', async (req, res) => {
+  const { reminder_date, reminder_text } = req.body
+  const sets: string[] = []
+  const params: any[] = []
+  let i = 1
+  if (reminder_date !== undefined) {
+    sets.push(`reminder_date = $${i++}`)
+    params.push(reminder_date)
+  }
+  if (reminder_text !== undefined) {
+    sets.push(`reminder_text = $${i++}`)
+    params.push(reminder_text)
+  }
+  if (sets.length === 0) return res.json({ success: true })
+  params.push(req.params.id)
+  await pool.query(`UPDATE reminders SET ${sets.join(', ')} WHERE id = $${i}`, params)
+  res.json({ success: true })
+})
+
 // Delete
 router.delete('/:id', async (req, res) => {
   await pool.query('DELETE FROM reminders WHERE id = $1', [req.params.id])

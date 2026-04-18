@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { loginUser, listUsers, createUser, updateUser, deleteUser, listPlatforms, addPlatform, deletePlatform, listCategories, addCategory, deleteCategory, transferCustomers } from '../database/users'
+import { loginUser, listUsers, createUser, updateUser, deleteUser, listPlatforms, addPlatform, deletePlatform, listCategories, addCategory, deleteCategory, listMinistries, addMinistry, deleteMinistry, transferCustomers } from '../database/users'
 
 export function registerUsersIPC(): void {
   ipcMain.handle('users:login', (_event, username: string, password: string) => loginUser(username, password))
@@ -41,6 +41,17 @@ export function registerUsersIPC(): void {
   })
   ipcMain.handle('categories:delete', (_event, id: number) => {
     deleteCategory(id)
+    return { success: true }
+  })
+
+  // Ministries
+  ipcMain.handle('ministries:list', () => listMinistries())
+  ipcMain.handle('ministries:add', (_event, name: string) => {
+    try { addMinistry(name); return { success: true } }
+    catch (err: any) { return { error: err.message } }
+  })
+  ipcMain.handle('ministries:delete', (_event, id: number) => {
+    deleteMinistry(id)
     return { success: true }
   })
 

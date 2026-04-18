@@ -34,6 +34,7 @@ export default function EditCustomer() {
   const reminderBefore = Form.useWatch('reminder_before', form)
   const [categories, setCategories] = useState<any[]>([])
   const [platforms, setPlatforms] = useState<any[]>([])
+  const [ministries, setMinistries] = useState<{ id: number; name: string }[]>([])
   const [allUsers, setAllUsers] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -43,6 +44,7 @@ export default function EditCustomer() {
   useEffect(() => {
     window.api.categories.list().then(setCategories).catch(() => {})
     window.api.platforms.list().then(setPlatforms).catch(() => {})
+    window.api.ministries.list().then(setMinistries).catch(() => {})
     if (isAdmin) {
       window.api.users.list().then((users: any[]) => setAllUsers(users.filter(u => u.role !== 'admin'))).catch(() => {})
     }
@@ -195,7 +197,13 @@ export default function EditCustomer() {
                 label={<FieldLabel>اسم الوزارة</FieldLabel>}
                 style={{ marginBottom: 0 }}
               >
-                <Input placeholder="مثال: وزارة العمل والشؤون الاجتماعية" style={{ borderRadius: 10, height: 40 }} />
+                <Select
+                  allowClear
+                  placeholder={ministries.length === 0 ? 'لم تُضف وزارات بعد (تواصل مع المدير)' : 'اختر الوزارة'}
+                  style={{ height: 40 }}
+                  options={ministries.map(m => ({ value: m.name, label: m.name }))}
+                  disabled={ministries.length === 0}
+                />
               </Form.Item>
               <Form.Item
                 name="category"

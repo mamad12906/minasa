@@ -22,10 +22,12 @@ export default function CustomerForm({ open, customer, onClose, onSave, platform
   const hasReminder = Form.useWatch('has_reminder', form)
   const [adminCategories, setAdminCategories] = useState<{ id: number; name: string }[]>([])
   const [adminPlatforms, setAdminPlatforms] = useState<{ id: number; name: string }[]>([])
+  const [adminMinistries, setAdminMinistries] = useState<{ id: number; name: string }[]>([])
   const [allUsers, setAllUsers] = useState<any[]>([])
 
   useEffect(() => {
     window.api.categories.list().then(setAdminCategories).catch(() => {})
+    window.api.ministries.list().then(setAdminMinistries).catch(() => {})
     if (isAdmin) {
       window.api.platforms.list().then(setAdminPlatforms).catch(() => {})
       window.api.users.list().then((users: any[]) => setAllUsers(users.filter(u => u.role !== 'admin'))).catch(() => {})
@@ -141,7 +143,12 @@ export default function CustomerForm({ open, customer, onClose, onSave, platform
         )}
 
         <Form.Item name="ministry_name" label="اسم الوزارة">
-          <Input placeholder="أدخل اسم الوزارة" />
+          <Select
+            allowClear
+            placeholder={adminMinistries.length === 0 ? 'لم تُضف وزارات بعد (تواصل مع المدير)' : 'اختر الوزارة'}
+            options={adminMinistries.map(m => ({ value: m.name, label: m.name }))}
+            disabled={adminMinistries.length === 0}
+          />
         </Form.Item>
 
         {/* Category: choose from admin-managed list */}

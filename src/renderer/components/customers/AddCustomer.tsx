@@ -34,11 +34,13 @@ export default function AddCustomer() {
   const reminderBefore = Form.useWatch('reminder_before', form)
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([])
   const [platforms, setPlatforms] = useState<{ id: number; name: string }[]>([])
+  const [ministries, setMinistries] = useState<{ id: number; name: string }[]>([])
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     window.api.categories.list().then(setCategories).catch(() => {})
     window.api.platforms.list().then(setPlatforms).catch(() => {})
+    window.api.ministries.list().then(setMinistries).catch(() => {})
   }, [])
 
   const endDate = monthsCount && monthsCount > 0
@@ -167,7 +169,13 @@ export default function AddCustomer() {
                 label={<FieldLabel>اسم الوزارة</FieldLabel>}
                 style={{ marginBottom: 0 }}
               >
-                <Input placeholder="مثال: وزارة العمل والشؤون الاجتماعية" style={{ borderRadius: 10, height: 40 }} />
+                <Select
+                  allowClear
+                  placeholder={ministries.length === 0 ? 'لم تُضف وزارات بعد (تواصل مع المدير)' : 'اختر الوزارة'}
+                  style={{ height: 40 }}
+                  options={ministries.map(m => ({ value: m.name, label: m.name }))}
+                  disabled={ministries.length === 0}
+                />
               </Form.Item>
               <Form.Item
                 name="category"

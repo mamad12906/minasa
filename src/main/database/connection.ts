@@ -121,6 +121,15 @@ export function getDatabase(): Database.Database {
     )
   `)
 
+  // Ministries table (managed by admin)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ministries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    )
+  `)
+
   // Settings table
   db.exec(`
     CREATE TABLE IF NOT EXISTS settings (

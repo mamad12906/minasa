@@ -8,6 +8,7 @@ import reminderRoutes from './routes/reminders'
 import userRoutes from './routes/users'
 import platformRoutes from './routes/platforms'
 import categoryRoutes from './routes/categories'
+import ministryRoutes from './routes/ministries'
 import dashboardRoutes from './routes/dashboard'
 import mobileUpdateRoutes from './routes/mobile-update'
 
@@ -59,6 +60,7 @@ app.use('/api/reminders', reminderRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/platforms', platformRoutes)
 app.use('/api/categories', categoryRoutes)
+app.use('/api/ministries', ministryRoutes)
 app.use('/api/dashboard', dashboardRoutes)
 
 async function start() {

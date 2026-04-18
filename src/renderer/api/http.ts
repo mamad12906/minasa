@@ -298,6 +298,18 @@ export const api = {
     ),
   },
 
+  ministries: {
+    list: () => hybridRead(() => serverGet('/api/ministries'), () => local().ministries.list()),
+    add: (name: string) => hybridWrite(
+      () => serverRequest('POST', '/api/ministries', { name }),
+      () => local().ministries.add(name),
+    ),
+    delete: (id: number) => hybridWrite(
+      () => serverRequest('DELETE', `/api/ministries/${id}`),
+      () => local().ministries.delete(id),
+    ),
+  },
+
   transfer: {
     customers: (ids: number[], targetPlatform: string) => hybridWrite(
       () => serverRequest('POST', '/api/customers/transfer', { customerIds: ids, targetPlatform }),

@@ -51,6 +51,11 @@ const localApi = {
     add: (name: string) => safeInvoke('categories:add', name),
     delete: (id: number) => safeInvoke('categories:delete', id),
   },
+  ministries: {
+    list: () => safeInvoke('ministries:list').then(r => r || []),
+    add: (name: string) => safeInvoke('ministries:add', name),
+    delete: (id: number) => safeInvoke('ministries:delete', id),
+  },
   transfer: {
     customers: (ids: number[], targetPlatform: string) => safeInvoke('customers:transfer', ids, targetPlatform),
   },

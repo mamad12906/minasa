@@ -164,6 +164,11 @@ declare global {
         add: (name: string) => Promise<any>
         delete: (id: number) => Promise<{ success: boolean }>
       }
+      ministries: {
+        list: () => Promise<{ id: number; name: string }[]>
+        add: (name: string) => Promise<any>
+        delete: (id: number) => Promise<{ success: boolean }>
+      }
       transfer: {
         customers: (ids: number[], targetPlatform: string) => Promise<{ success: boolean }>
       }

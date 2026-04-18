@@ -48,6 +48,7 @@ export default function AdminPanel() {
   const [users, setUsers] = useState<any[]>([])
   const [platforms, setPlatforms] = useState<any[]>([])
   const [adminCategories, setAdminCategories] = useState<any[]>([])
+  const [ministries, setMinistries] = useState<any[]>([])
   const [auditLog, setAuditLog] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
@@ -55,11 +56,13 @@ export default function AdminPanel() {
   const [form] = Form.useForm()
   const [newPlatform, setNewPlatform] = useState('')
   const [newCategory, setNewCategory] = useState('')
+  const [newMinistry, setNewMinistry] = useState('')
 
   useEffect(() => {
     loadUsers()
     loadPlatforms()
     loadCategories()
+    loadMinistries()
     loadAuditLog()
   }, [])
 
@@ -76,6 +79,10 @@ export default function AdminPanel() {
   const loadCategories = async () => {
     try { setAdminCategories(await window.api.categories.list()) }
     catch (err) { console.error('[AdminPanel] Failed to load categories:', err) }
+  }
+  const loadMinistries = async () => {
+    try { setMinistries(await window.api.ministries.list()) }
+    catch (err) { console.error('[AdminPanel] Failed to load ministries:', err) }
   }
   const loadAuditLog = async () => {
     try {
@@ -105,6 +112,17 @@ export default function AdminPanel() {
     await window.api.categories.delete(id)
     message.success('تم حذف الصنف')
     loadCategories()
+  }
+  const handleAddMinistry = async () => {
+    if (!newMinistry.trim()) return
+    const res = await window.api.ministries.add(newMinistry.trim())
+    if ((res as any).error) message.error('الوزارة موجودة مسبقاً')
+    else { message.success('تم إضافة الوزارة'); setNewMinistry(''); loadMinistries() }
+  }
+  const handleDeleteMinistry = async (id: number) => {
+    await window.api.ministries.delete(id)
+    message.success('تم حذف الوزارة')
+    loadMinistries()
   }
 
   const handleAdd = () => {
@@ -468,6 +486,61 @@ export default function AdminPanel() {
                   {c.name}
                   <button
                     onClick={() => handleDeleteCategory(c.id)}
+                    style={{
+                      background: 'transparent', border: 'none',
+                      cursor: 'pointer', color: 'inherit',
+                      padding: 0, display: 'flex', alignItems: 'center',
+                      opacity: 0.7,
+                    }}
+                    title="حذف"
+                  >
+                    <Icon name="x" size={10} stroke={2.3} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Ministries */}
+        <div className="card" style={{ padding: 22 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 9,
+              background: 'var(--accent-bg)', color: 'var(--accent)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Icon name="building" size={15} />
+            </div>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>إدارة الوزارات</h3>
+            <span className="chip chip--neutral" style={{ marginInlineStart: 'auto' }}>
+              <span className="num">{ministries.length}</span>
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            <input
+              className="input"
+              placeholder="اسم الوزارة الجديدة..."
+              value={newMinistry}
+              onChange={e => setNewMinistry(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAddMinistry()}
+              style={{ flex: 1 }}
+            />
+            <button className="btn btn--primary btn--sm" onClick={handleAddMinistry}>
+              <Icon name="plus" size={12} stroke={2.3} /> إضافة
+            </button>
+          </div>
+
+          {ministries.length === 0 ? (
+            <div className="muted" style={{ fontSize: 12, padding: 10 }}>لا توجد وزارات بعد.</div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {ministries.map(m => (
+                <span key={m.id} className="chip chip--accent" style={{ cursor: 'default' }}>
+                  {m.name}
+                  <button
+                    onClick={() => handleDeleteMinistry(m.id)}
                     style={{
                       background: 'transparent', border: 'none',
                       cursor: 'pointer', color: 'inherit',

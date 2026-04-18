@@ -100,6 +100,22 @@ export function deleteCategory(id: number) {
   db.prepare('DELETE FROM categories WHERE id = ?').run(id)
 }
 
+// Ministries
+export function listMinistries(): { id: number; name: string }[] {
+  const db = getDatabase()
+  return db.prepare('SELECT * FROM ministries ORDER BY name ASC').all() as any[]
+}
+
+export function addMinistry(name: string) {
+  const db = getDatabase()
+  db.prepare('INSERT OR IGNORE INTO ministries (name) VALUES (?)').run(name)
+}
+
+export function deleteMinistry(id: number) {
+  const db = getDatabase()
+  db.prepare('DELETE FROM ministries WHERE id = ?').run(id)
+}
+
 // Transfer customers between platforms
 export function transferCustomers(customerIds: number[], targetPlatform: string) {
   const db = getDatabase()
