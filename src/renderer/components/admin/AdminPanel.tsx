@@ -214,6 +214,174 @@ export default function AdminPanel() {
         })}
       </div>
 
+      {/* ===== Platforms + Categories + Ministries (above users) ===== */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+        {/* Platforms */}
+        <div className="card" style={{ padding: 22 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 9,
+              background: 'var(--brand-tint)', color: 'var(--brand)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Icon name="layers" size={15} />
+            </div>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>إدارة المنصات</h3>
+            <span className="chip chip--neutral" style={{ marginInlineStart: 'auto' }}>
+              <span className="num">{platforms.length}</span>
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            <input
+              className="input"
+              placeholder="اسم المنصة الجديدة..."
+              value={newPlatform}
+              onChange={e => setNewPlatform(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAddPlatform()}
+              style={{ flex: 1 }}
+            />
+            <button className="btn btn--primary btn--sm" onClick={handleAddPlatform}>
+              <Icon name="plus" size={12} stroke={2.3} /> إضافة
+            </button>
+          </div>
+
+          {platforms.length === 0 ? (
+            <div className="muted" style={{ fontSize: 12, padding: 10 }}>لا توجد منصات بعد.</div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {platforms.map(p => (
+                <span key={p.id} className="chip chip--brand" style={{ cursor: 'default' }}>
+                  {p.name}
+                  <button
+                    onClick={() => handleDeletePlatform(p.id)}
+                    style={{
+                      background: 'transparent', border: 'none',
+                      cursor: 'pointer', color: 'inherit',
+                      padding: 0, display: 'flex', alignItems: 'center',
+                      opacity: 0.7,
+                    }}
+                    title="حذف"
+                  >
+                    <Icon name="x" size={10} stroke={2.3} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Categories */}
+        <div className="card" style={{ padding: 22 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 9,
+              background: 'var(--violet-bg)', color: 'var(--violet)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Icon name="tag" size={15} />
+            </div>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>إدارة أصناف الزبائن</h3>
+            <span className="chip chip--neutral" style={{ marginInlineStart: 'auto' }}>
+              <span className="num">{adminCategories.length}</span>
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            <input
+              className="input"
+              placeholder="اسم الصنف الجديد..."
+              value={newCategory}
+              onChange={e => setNewCategory(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
+              style={{ flex: 1 }}
+            />
+            <button className="btn btn--primary btn--sm" onClick={handleAddCategory}>
+              <Icon name="plus" size={12} stroke={2.3} /> إضافة
+            </button>
+          </div>
+
+          {adminCategories.length === 0 ? (
+            <div className="muted" style={{ fontSize: 12, padding: 10 }}>لا توجد أصناف بعد.</div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {adminCategories.map(c => (
+                <span key={c.id} className="chip chip--violet" style={{ cursor: 'default' }}>
+                  {c.name}
+                  <button
+                    onClick={() => handleDeleteCategory(c.id)}
+                    style={{
+                      background: 'transparent', border: 'none',
+                      cursor: 'pointer', color: 'inherit',
+                      padding: 0, display: 'flex', alignItems: 'center',
+                      opacity: 0.7,
+                    }}
+                    title="حذف"
+                  >
+                    <Icon name="x" size={10} stroke={2.3} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Ministries */}
+        <div className="card" style={{ padding: 22 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 9,
+              background: 'var(--accent-bg)', color: 'var(--accent)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Icon name="building" size={15} />
+            </div>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>إدارة الوزارات</h3>
+            <span className="chip chip--neutral" style={{ marginInlineStart: 'auto' }}>
+              <span className="num">{ministries.length}</span>
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            <input
+              className="input"
+              placeholder="اسم الوزارة الجديدة..."
+              value={newMinistry}
+              onChange={e => setNewMinistry(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAddMinistry()}
+              style={{ flex: 1 }}
+            />
+            <button className="btn btn--primary btn--sm" onClick={handleAddMinistry}>
+              <Icon name="plus" size={12} stroke={2.3} /> إضافة
+            </button>
+          </div>
+
+          {ministries.length === 0 ? (
+            <div className="muted" style={{ fontSize: 12, padding: 10 }}>لا توجد وزارات بعد.</div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {ministries.map(m => (
+                <span key={m.id} className="chip chip--accent" style={{ cursor: 'default' }}>
+                  {m.name}
+                  <button
+                    onClick={() => handleDeleteMinistry(m.id)}
+                    style={{
+                      background: 'transparent', border: 'none',
+                      cursor: 'pointer', color: 'inherit',
+                      padding: 0, display: 'flex', alignItems: 'center',
+                      opacity: 0.7,
+                    }}
+                    title="حذف"
+                  >
+                    <Icon name="x" size={10} stroke={2.3} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* ===== Users + recent changes ===== */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 14 }}>
         {/* Users table */}
@@ -385,174 +553,6 @@ export default function AdminPanel() {
                   </div>
                 )
               })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ===== Platforms + Categories ===== */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        {/* Platforms */}
-        <div className="card" style={{ padding: 22 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: 9,
-              background: 'var(--brand-tint)', color: 'var(--brand)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Icon name="layers" size={15} />
-            </div>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>إدارة المنصات</h3>
-            <span className="chip chip--neutral" style={{ marginInlineStart: 'auto' }}>
-              <span className="num">{platforms.length}</span>
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-            <input
-              className="input"
-              placeholder="اسم المنصة الجديدة..."
-              value={newPlatform}
-              onChange={e => setNewPlatform(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddPlatform()}
-              style={{ flex: 1 }}
-            />
-            <button className="btn btn--primary btn--sm" onClick={handleAddPlatform}>
-              <Icon name="plus" size={12} stroke={2.3} /> إضافة
-            </button>
-          </div>
-
-          {platforms.length === 0 ? (
-            <div className="muted" style={{ fontSize: 12, padding: 10 }}>لا توجد منصات بعد.</div>
-          ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {platforms.map(p => (
-                <span key={p.id} className="chip chip--brand" style={{ cursor: 'default' }}>
-                  {p.name}
-                  <button
-                    onClick={() => handleDeletePlatform(p.id)}
-                    style={{
-                      background: 'transparent', border: 'none',
-                      cursor: 'pointer', color: 'inherit',
-                      padding: 0, display: 'flex', alignItems: 'center',
-                      opacity: 0.7,
-                    }}
-                    title="حذف"
-                  >
-                    <Icon name="x" size={10} stroke={2.3} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Categories */}
-        <div className="card" style={{ padding: 22 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: 9,
-              background: 'var(--violet-bg)', color: 'var(--violet)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Icon name="tag" size={15} />
-            </div>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>إدارة أصناف الزبائن</h3>
-            <span className="chip chip--neutral" style={{ marginInlineStart: 'auto' }}>
-              <span className="num">{adminCategories.length}</span>
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-            <input
-              className="input"
-              placeholder="اسم الصنف الجديد..."
-              value={newCategory}
-              onChange={e => setNewCategory(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
-              style={{ flex: 1 }}
-            />
-            <button className="btn btn--primary btn--sm" onClick={handleAddCategory}>
-              <Icon name="plus" size={12} stroke={2.3} /> إضافة
-            </button>
-          </div>
-
-          {adminCategories.length === 0 ? (
-            <div className="muted" style={{ fontSize: 12, padding: 10 }}>لا توجد أصناف بعد.</div>
-          ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {adminCategories.map(c => (
-                <span key={c.id} className="chip chip--violet" style={{ cursor: 'default' }}>
-                  {c.name}
-                  <button
-                    onClick={() => handleDeleteCategory(c.id)}
-                    style={{
-                      background: 'transparent', border: 'none',
-                      cursor: 'pointer', color: 'inherit',
-                      padding: 0, display: 'flex', alignItems: 'center',
-                      opacity: 0.7,
-                    }}
-                    title="حذف"
-                  >
-                    <Icon name="x" size={10} stroke={2.3} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Ministries */}
-        <div className="card" style={{ padding: 22 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: 9,
-              background: 'var(--accent-bg)', color: 'var(--accent)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Icon name="building" size={15} />
-            </div>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>إدارة الوزارات</h3>
-            <span className="chip chip--neutral" style={{ marginInlineStart: 'auto' }}>
-              <span className="num">{ministries.length}</span>
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-            <input
-              className="input"
-              placeholder="اسم الوزارة الجديدة..."
-              value={newMinistry}
-              onChange={e => setNewMinistry(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddMinistry()}
-              style={{ flex: 1 }}
-            />
-            <button className="btn btn--primary btn--sm" onClick={handleAddMinistry}>
-              <Icon name="plus" size={12} stroke={2.3} /> إضافة
-            </button>
-          </div>
-
-          {ministries.length === 0 ? (
-            <div className="muted" style={{ fontSize: 12, padding: 10 }}>لا توجد وزارات بعد.</div>
-          ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {ministries.map(m => (
-                <span key={m.id} className="chip chip--accent" style={{ cursor: 'default' }}>
-                  {m.name}
-                  <button
-                    onClick={() => handleDeleteMinistry(m.id)}
-                    style={{
-                      background: 'transparent', border: 'none',
-                      cursor: 'pointer', color: 'inherit',
-                      padding: 0, display: 'flex', alignItems: 'center',
-                      opacity: 0.7,
-                    }}
-                    title="حذف"
-                  >
-                    <Icon name="x" size={10} stroke={2.3} />
-                  </button>
-                </span>
-              ))}
             </div>
           )}
         </div>
