@@ -26,6 +26,8 @@ export default function CustomerDetailPage() {
   const { id } = useParams()
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
+  const canDelete = isAdmin || user?.permissions?.delete_customer === true
+  const canEdit = isAdmin || user?.permissions?.edit_customer === true
 
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [customColumns, setCustomColumns] = useState<CustomColumn[]>([])
@@ -196,17 +198,19 @@ export default function CustomerDetailPage() {
             <Icon name="swap" size={12} /> نقل
           </button>
         )}
-        <Popconfirm
-          title="هل أنت متأكد من حذف الزبون؟"
-          onConfirm={handleDelete}
-          okText="نعم، احذف"
-          cancelText="إلغاء"
-          okButtonProps={{ danger: true }}
-        >
-          <button className="btn btn--danger btn--sm">
-            <Icon name="trash" size={12} /> حذف
-          </button>
-        </Popconfirm>
+        {canDelete && (
+          <Popconfirm
+            title="هل أنت متأكد من حذف الزبون؟"
+            onConfirm={handleDelete}
+            okText="نعم، احذف"
+            cancelText="إلغاء"
+            okButtonProps={{ danger: true }}
+          >
+            <button className="btn btn--danger btn--sm">
+              <Icon name="trash" size={12} /> حذف
+            </button>
+          </Popconfirm>
+        )}
         <button className="btn btn--primary btn--sm" onClick={() => navigate(`/edit-customer/${customer.id}`)}>
           <Icon name="edit" size={12} /> تعديل
         </button>

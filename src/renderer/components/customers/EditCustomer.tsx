@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Form, Input, Select, InputNumber, DatePicker, Button, message, Spin } from 'antd'
+import { Form, Input, Select, InputNumber, DatePicker, Button, Checkbox, message, Spin } from 'antd'
 import dayjs from 'dayjs'
 import { useAuth } from '../../App'
 import Icon from '../layout/Icon'
@@ -36,6 +36,7 @@ export default function EditCustomer() {
   const [platforms, setPlatforms] = useState<any[]>([])
   const [ministries, setMinistries] = useState<{ id: number; name: string }[]>([])
   const [allUsers, setAllUsers] = useState<any[]>([])
+  const [enableDuration, setEnableDuration] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [createdAt, setCreatedAt] = useState<string>('')
@@ -65,6 +66,7 @@ export default function EditCustomer() {
       }
       setCreatedAt(values.created_at || '')
       setCustomerName(values.full_name || '')
+      setEnableDuration((values.months_count ?? 0) > 0)
       form.setFieldsValue(values)
     } catch (err) {
       console.error('[EditCustomer] Failed to load customer:', err)
@@ -81,6 +83,12 @@ export default function EditCustomer() {
     setSaving(true)
     if (Array.isArray(values.platform_name)) values.platform_name = values.platform_name[0] || ''
     if (Array.isArray(values.category)) values.category = values.category[0] || ''
+
+    if (!enableDuration) {
+      values.months_count = 0
+      values.status_note = ''
+      values.reminder_before = undefined
+    }
 
     if (values.months_count && values.months_count > 0 && values.reminder_before && values.reminder_before > 0) {
       const end = baseDate.add(values.months_count, 'month')
@@ -269,7 +277,15 @@ export default function EditCustomer() {
 
         {/* Duration */}
         <div className="card" style={{ padding: 24, marginBottom: 14 }}>
-          <Section title="المدة والحالة">
+          <Section title="المدة والحالة (اختياري)">
+            <Checkbox
+              checked={enableDuration}
+              onChange={e => setEnableDuration(e.target.checked)}
+              style={{ marginBottom: enableDuration ? 16 : 0 }}
+            >
+              تفعيل مدة اشتراك وحالة للزبون
+            </Checkbox>
+            {enableDuration && (<>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <Form.Item
                 name="months_count"
@@ -364,6 +380,7 @@ export default function EditCustomer() {
                 )}
               </div>
             )}
+            </>)}
           </Section>
         </div>
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Form, Input, Select, InputNumber, DatePicker, Button, message } from 'antd'
+import { Form, Input, Select, InputNumber, DatePicker, Button, Checkbox, message } from 'antd'
 import dayjs from 'dayjs'
 import { useAuth } from '../../App'
 import Icon from '../layout/Icon'
@@ -35,6 +35,7 @@ export default function AddCustomer() {
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([])
   const [platforms, setPlatforms] = useState<{ id: number; name: string }[]>([])
   const [ministries, setMinistries] = useState<{ id: number; name: string }[]>([])
+  const [enableDuration, setEnableDuration] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -55,6 +56,12 @@ export default function AddCustomer() {
     setSaving(true)
     if (Array.isArray(values.platform_name)) values.platform_name = values.platform_name[0] || ''
     if (Array.isArray(values.category)) values.category = values.category[0] || ''
+
+    if (!enableDuration) {
+      values.months_count = 0
+      values.status_note = ''
+      values.reminder_before = undefined
+    }
 
     if (values.months_count && values.months_count > 0 && values.reminder_before && values.reminder_before > 0) {
       const end = dayjs().add(values.months_count, 'month')
@@ -233,9 +240,17 @@ export default function AddCustomer() {
           </Section>
         </div>
 
-        {/* ============ Duration & auto reminder ============ */}
+        {/* ============ Duration & auto reminder (optional) ============ */}
         <div className="card" style={{ padding: 24, marginBottom: 14 }}>
-          <Section title="المدة والحالة">
+          <Section title="المدة والحالة (اختياري)">
+            <Checkbox
+              checked={enableDuration}
+              onChange={e => setEnableDuration(e.target.checked)}
+              style={{ marginBottom: enableDuration ? 16 : 0 }}
+            >
+              تفعيل مدة اشتراك وحالة للزبون
+            </Checkbox>
+            {enableDuration && (<>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <Form.Item
                 name="months_count"
@@ -341,6 +356,7 @@ export default function AddCustomer() {
                 )}
               </div>
             )}
+            </>)}
           </Section>
         </div>
 
