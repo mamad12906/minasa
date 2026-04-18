@@ -4,10 +4,15 @@ import { execSync } from 'child_process'
 import dotenv from 'dotenv'
 dotenv.config()
 
-const BOT_TOKEN = '8785783121:AAG1dfvREmehG4PpURm2x3POjvi4TKviBoA'
-const CHAT_ID = '-1003849521321'
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || ''
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID || ''
 const SERVER_URL = 'http://localhost:3000'
-const API_KEY = process.env.API_KEY || '0e41110d5a68a831368b18024ab00d973186cfe5f6049ce4'
+const API_KEY = process.env.API_KEY || ''
+
+if (!BOT_TOKEN || !CHAT_ID) {
+  console.error('TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set in .env')
+  process.exit(1)
+}
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 
@@ -220,7 +225,7 @@ async function autoCheck() {
       sendMessage('✅ <b>السيرفر عاد للعمل</b>')
       lastServerState = true
     }
-  } catch {}
+  } catch (err) { console.error('[telegram-bot] Auto-check failed:', err) }
 }
 
 // Check every 5 minutes

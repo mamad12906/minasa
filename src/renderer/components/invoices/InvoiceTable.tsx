@@ -19,7 +19,7 @@ const statusColors: Record<string, string> = {
   'ملغاة': 'default'
 }
 
-export default function InvoiceTable() {
+function InvoiceTable() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -172,3 +172,5 @@ export default function InvoiceTable() {
     </div>
   )
 }
+
+export default React.memo(InvoiceTable)

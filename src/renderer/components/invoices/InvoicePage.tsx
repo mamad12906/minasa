@@ -59,12 +59,12 @@ export default function InvoicePage() {
   }
 
   const handleDelete = async (id: number) => {
-    try { await inv.delete(id); message.success('تم حذف الفاتورة'); load() } catch {}
+    try { await inv.delete(id); message.success('تم حذف الفاتورة'); load() } catch (err) { console.error('[InvoicePage] Failed to delete invoice:', err) }
   }
 
   const openPayments = async (invoice: any) => {
     setPaymentDrawer(invoice)
-    try { setPayments(await inv.payments(invoice.id) || []) } catch { setPayments([]) }
+    try { setPayments(await inv.payments(invoice.id) || []) } catch (err) { console.error('[InvoicePage] Failed to load payments:', err); setPayments([]) }
   }
 
   const addPayment = async () => {
@@ -190,7 +190,7 @@ export default function InvoicePage() {
                   { title: 'ملاحظة', dataIndex: 'notes', ellipsis: true },
                   { title: '', key: 'a', width: 40, render: (_: any, r: any) => (
                     <Popconfirm title="حذف؟" onConfirm={async () => {
-                      try { await inv.deletePayment(r.id); openPayments(paymentDrawer) } catch {}
+                      try { await inv.deletePayment(r.id); openPayments(paymentDrawer) } catch (err) { console.error('[InvoicePage] Failed to delete payment:', err) }
                     }}><Button type="link" size="small" danger icon={<DeleteOutlined />} /></Popconfirm>
                   )}
                 ]}

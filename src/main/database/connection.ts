@@ -60,6 +60,9 @@ export function getDatabase(): Database.Database {
   `)
   db.exec('CREATE INDEX IF NOT EXISTS idx_reminders_date ON reminders(reminder_date)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_reminders_done ON reminders(is_done)')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_reminders_customer ON reminders(customer_id)')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_customers_user_id ON customers(user_id)')
 
   // Migration: add reminder extra fields
   const rCols = db.prepare("PRAGMA table_info(reminders)").all() as any[]
@@ -126,14 +129,37 @@ export function getDatabase(): Database.Database {
     )
   `)
 
-  // Create default admin if not exists
+  // Create default admin with randomly generated password if not exists.
+  // User is forced to change it on first login (hence must_change_password flag).
   const adminExists = db.prepare("SELECT id FROM users WHERE role = 'admin'").get()
   if (!adminExists) {
-    let bcrypt: any
-    try { bcrypt = require('bcryptjs') } catch {}
-    const hashedPw = bcrypt ? bcrypt.hashSync('admin', 10) : 'admin'
+    const bcrypt = require('bcryptjs')
+    const crypto = require('crypto')
+    // Generate secure random password (12 chars, alphanumeric)
+    const randomPw = crypto.randomBytes(9).toString('base64').replace(/[+/=]/g, '').substring(0, 12)
+    const hashedPw = bcrypt.hashSync(randomPw, 10)
     db.prepare("INSERT INTO users (username, password, display_name, role, permissions, platform_name) VALUES (?, ?, ?, ?, ?, ?)")
       .run('admin', hashedPw, 'مدير النظام', 'admin', '{}', '')
+    // Write initial password to file so admin can read it once
+    try {
+      const fs = require('fs')
+      const path = require('path')
+      const { app } = require('electron')
+      const credFile = path.join(app.getPath('userData'), 'INITIAL_ADMIN_PASSWORD.txt')
+      fs.writeFileSync(credFile,
+        `منصة - كلمة المرور الأولى لحساب المدير\n` +
+        `─────────────────────────────────────\n\n` +
+        `اسم المستخدم: admin\n` +
+        `كلمة المرور:  ${randomPw}\n\n` +
+        `⚠️ يرجى تسجيل الدخول وتغيير كلمة المرور فوراً.\n` +
+        `سيتم حذف هذا الملف بعد أول تسجيل دخول ناجح.\n`,
+        { encoding: 'utf8' })
+      console.log('[initDB] Initial admin password written to:', credFile)
+    } catch (err: any) {
+      console.error('[initDB] Failed to write initial password file:', err.message)
+      // Fallback: log to console
+      console.log('[initDB] INITIAL ADMIN PASSWORD:', randomPw)
+    }
   }
 
   // Audit log table

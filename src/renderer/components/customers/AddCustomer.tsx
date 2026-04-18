@@ -1,13 +1,27 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Form, Input, Select, InputNumber, DatePicker, Checkbox, Button, message, Row, Col } from 'antd'
-import {
-  UserAddOutlined, SaveOutlined, ArrowRightOutlined, BellOutlined,
-  PhoneOutlined, IdcardOutlined, BankOutlined,
-  FileTextOutlined, CalendarOutlined, LinkOutlined
-} from '@ant-design/icons'
+import { Form, Input, Select, InputNumber, DatePicker, Button, message } from 'antd'
 import dayjs from 'dayjs'
 import { useAuth } from '../../App'
+import Icon from '../layout/Icon'
+
+// ========= Reusable form primitives =========
+const Section = ({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) => (
+  <div className={className}>
+    <div className="eyebrow" style={{ marginBottom: 12 }}>{title}</div>
+    {children}
+  </div>
+)
+
+const FieldLabel = ({ children }: { children: React.ReactNode }) => (
+  <div style={{
+    fontSize: 11.5,
+    fontWeight: 500,
+    color: 'var(--text-muted)',
+    letterSpacing: '0.02em',
+    marginBottom: 6,
+  }}>{children}</div>
+)
 
 export default function AddCustomer() {
   const navigate = useNavigate()
@@ -27,7 +41,6 @@ export default function AddCustomer() {
     window.api.platforms.list().then(setPlatforms).catch(() => {})
   }, [])
 
-  // Compute end date and reminder date
   const endDate = monthsCount && monthsCount > 0
     ? dayjs().add(monthsCount, 'month')
     : null
@@ -41,7 +54,6 @@ export default function AddCustomer() {
     if (Array.isArray(values.platform_name)) values.platform_name = values.platform_name[0] || ''
     if (Array.isArray(values.category)) values.category = values.category[0] || ''
 
-    // Auto reminder from months_count
     if (values.months_count && values.months_count > 0 && values.reminder_before && values.reminder_before > 0) {
       const end = dayjs().add(values.months_count, 'month')
       const remind = end.subtract(values.reminder_before, 'month')
@@ -50,7 +62,6 @@ export default function AddCustomer() {
     }
     delete values.reminder_before
 
-    // Manual reminder
     if (values.has_reminder && values.manual_reminder_date) {
       values.reminder_date = values.manual_reminder_date.format('YYYY-MM-DD')
       values.reminder_text = values.manual_reminder_text || 'تذكير يدوي'
@@ -69,144 +80,372 @@ export default function AddCustomer() {
     navigate('/customers')
   }
 
-  const fieldCard = (icon: React.ReactNode, color: string, title: string, children: React.ReactNode) => (
-    <div className="field-card" style={{ borderTop: `3px solid ${color}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <div style={{
-          width: 32, height: 32, borderRadius: 8, background: color,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#fff', fontSize: 16
-        }}>{icon}</div>
-        <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{title}</span>
-      </div>
-      {children}
-    </div>
-  )
+  const monthsPresets = [3, 6, 12, 24, 36]
 
   return (
-    <div>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2><UserAddOutlined style={{ marginLeft: 8 }} />إضافة زبون جديد</h2>
-          <p>أدخل بيانات الزبون الجديد</p>
-        </div>
-        <Button icon={<ArrowRightOutlined />} onClick={() => navigate('/customers')}
-          style={{ borderRadius: 8 }}>رجوع للزبائن</Button>
+    <div style={{ maxWidth: 980, margin: '0 auto' }}>
+      {/* Top back-bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <button className="btn btn--ghost btn--sm" onClick={() => navigate('/customers')}>
+          <Icon name="arrow_right" size={12} /> عودة لقائمة الزبائن
+        </button>
       </div>
 
-      <Form form={form} layout="vertical" size="large">
-        <Row gutter={20}>
-          <Col xs={24} lg={12}>
-            {fieldCard(<IdcardOutlined />, '#1B6B93', 'المعلومات الأساسية', (
-              <>
-                <Form.Item name="full_name" label="اسم الزبون الرباعي"
-                  rules={[{ required: true, message: 'يرجى إدخال الاسم' }]}>
-                  <Input placeholder="أدخل الاسم الرباعي" />
-                </Form.Item>
-                <Form.Item name="mother_name" label="اسم الأم">
-                  <Input placeholder="أدخل اسم الأم" />
-                </Form.Item>
-                <Row gutter={12}>
-                  <Col span={12}>
-                    <Form.Item name="phone_number" label="رقم الهاتف">
-                      <Input prefix={<PhoneOutlined />} placeholder="رقم الهاتف" />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <Form.Item name="card_number" label="رقم البطاقة">
-                      <Input prefix={<IdcardOutlined />} placeholder="رقم البطاقة" />
-                    </Form.Item>
-                  </Col>
-                </Row>
-              </>
-            ))}
-            {fieldCard(<BankOutlined />, '#2DA44E', 'التصنيف والجهة', (
-              <>
-                <Form.Item name="link_to_platform" valuePropName="checked" style={{ marginBottom: 8 }}>
-                  <Checkbox><LinkOutlined /> ربط الزبون بمنصة</Checkbox>
-                </Form.Item>
-                {linkToPlatform && (
-                  <Form.Item name="platform_name" label="اسم المنصة" rules={[{ required: true, message: 'اختر المنصة' }]}>
-                    <Select allowClear placeholder="اختر المنصة">
-                      {platforms.map(p => <Select.Option key={p.id} value={p.name}>{p.name}</Select.Option>)}
-                    </Select>
-                  </Form.Item>
-                )}
-                <Form.Item name="ministry_name" label="اسم الوزارة">
-                  <Input prefix={<BankOutlined />} placeholder="أدخل اسم الوزارة" />
-                </Form.Item>
-                <Form.Item name="category" label="صنف الزبون">
-                  <Select allowClear placeholder="اختر صنف الزبون"
-                    options={categories.map(c => ({ value: c.name, label: c.name }))} />
-                </Form.Item>
-              </>
-            ))}
-          </Col>
-          <Col xs={24} lg={12}>
-            {fieldCard(<CalendarOutlined />, '#CF222E', 'المدة والتذكير التلقائي', (
-              <>
-                <Form.Item name="months_count" label="عدد الأشهر">
-                  <InputNumber min={1} placeholder="مثال: 10، 18، 36..." style={{ width: '100%' }} addonAfter="شهر" />
-                </Form.Item>
-                {monthsCount && monthsCount > 0 && (
-                  <>
-                    <div style={{
-                      fontSize: 13, color: 'var(--text-primary)',
-                      background: 'var(--info-bg)', padding: '10px 14px', borderRadius: 8,
-                      border: '1px solid var(--info-border)', marginBottom: 12
-                    }}>
-                      <div>تاريخ اليوم: <strong>{dayjs().format('YYYY-MM-DD')}</strong></div>
-                      <div>تاريخ الانتهاء: <strong style={{ color: 'var(--error)' }}>{endDate?.format('YYYY-MM-DD')}</strong></div>
-                    </div>
-                    <Form.Item name="reminder_before" label="تذكير قبل الانتهاء بـ">
-                      <InputNumber min={1} max={monthsCount - 1} placeholder="مثال: 2" style={{ width: '100%' }} addonAfter="شهر" />
-                    </Form.Item>
-                    {autoReminderDate && (
-                      <div style={{
-                        fontSize: 13, color: 'var(--text-primary)',
-                        background: 'var(--success-bg)', padding: '10px 14px', borderRadius: 8,
-                        border: '1px solid var(--success-border)', marginBottom: 12
-                      }}>
-                        تاريخ التذكير التلقائي: <strong style={{ color: 'var(--success)' }}>{autoReminderDate.format('YYYY-MM-DD')}</strong>
-                      </div>
-                    )}
-                  </>
-                )}
-                <Form.Item name="status_note" label="الحالة">
-                  <Input placeholder="مثال: تذبذب شمول، قيد المراجعة..." />
-                </Form.Item>
-              </>
-            ))}
-            {fieldCard(<BellOutlined />, '#D29922', 'تذكير يدوي إضافي', (
-              <>
-                <Form.Item name="has_reminder" valuePropName="checked">
-                  <Checkbox>تفعيل تذكير يدوي بتاريخ محدد</Checkbox>
-                </Form.Item>
-                {hasReminder && (
-                  <>
-                    <Form.Item name="manual_reminder_date" label="تاريخ التذكير" rules={[{ required: true, message: 'اختر التاريخ' }]}>
-                      <DatePicker style={{ width: '100%' }} placeholder="اختر تاريخ التذكير" />
-                    </Form.Item>
-                    <Form.Item name="manual_reminder_text" label="نص التذكير" rules={[{ required: true, message: 'اكتب نص التذكير' }]}>
-                      <Input placeholder="مثال: تم شموله، متابعة الطلب..." />
-                    </Form.Item>
-                  </>
-                )}
-              </>
-            ))}
-            {fieldCard(<FileTextOutlined />, '#1B6B93', 'ملاحظات', (
-              <Form.Item name="notes" label="ملاحظات">
-                <Input.TextArea rows={3} placeholder="ملاحظات إضافية عن الزبون..." />
-              </Form.Item>
-            ))}
-          </Col>
-        </Row>
+      {/* Header card */}
+      <div className="card" style={{ padding: '20px 24px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: 11,
+          background: 'var(--brand-tint)',
+          color: 'var(--brand)',
+          border: '1px solid var(--brand-tint-hi)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icon name="plus" size={20} stroke={2} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <h2 style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>إضافة زبون جديد</h2>
+          <p style={{ fontSize: 12.5, marginTop: 2, color: 'var(--text-muted)' }}>
+            املأ الحقول المطلوبة. الحقول المُعلّمة بـ <span style={{ color: 'var(--danger)' }}>*</span> إلزامية.
+          </p>
+        </div>
+      </div>
 
-        <div style={{ textAlign: 'center', marginTop: 12 }}>
-          <Button type="primary" size="large" icon={<SaveOutlined />}
-            onClick={handleSave} loading={saving}
-            style={{ borderRadius: 10, minWidth: 220, height: 48, fontSize: 16, fontWeight: 600 }}>
-            حفظ الزبون
+      <Form form={form} layout="vertical" requiredMark={false}>
+        {/* ============ Personal info ============ */}
+        <div className="card" style={{ padding: 24, marginBottom: 14 }}>
+          <Section title="المعلومات الشخصية">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <Form.Item
+                name="full_name"
+                label={<FieldLabel>الاسم الرباعي <span style={{ color: 'var(--danger)' }}>*</span></FieldLabel>}
+                rules={[{ required: true, message: 'يرجى إدخال الاسم' }]}
+                style={{ marginBottom: 0 }}
+              >
+                <Input placeholder="مثال: سارة عبدالله العتيبي الحربي" style={{ borderRadius: 10, height: 40 }} />
+              </Form.Item>
+              <Form.Item
+                name="mother_name"
+                label={<FieldLabel>اسم الأم</FieldLabel>}
+                style={{ marginBottom: 0 }}
+              >
+                <Input placeholder="مثال: أم عبدالله" style={{ borderRadius: 10, height: 40 }} />
+              </Form.Item>
+              <Form.Item
+                name="phone_number"
+                label={<FieldLabel>رقم الهاتف</FieldLabel>}
+                style={{ marginBottom: 0 }}
+              >
+                <Input
+                  placeholder="0770 123 4567"
+                  className="num"
+                  style={{ borderRadius: 10, height: 40 }}
+                  prefix={<Icon name="phone" size={13} style={{ color: 'var(--text-muted)' }} />}
+                />
+              </Form.Item>
+              <Form.Item
+                name="card_number"
+                label={<FieldLabel>رقم البطاقة</FieldLabel>}
+                style={{ marginBottom: 0 }}
+              >
+                <Input
+                  placeholder="198412345"
+                  className="num"
+                  style={{ borderRadius: 10, height: 40 }}
+                  prefix={<Icon name="id" size={13} style={{ color: 'var(--text-muted)' }} />}
+                />
+              </Form.Item>
+            </div>
+          </Section>
+        </div>
+
+        {/* ============ Classification ============ */}
+        <div className="card" style={{ padding: 24, marginBottom: 14 }}>
+          <Section title="التصنيف والمنصة">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <Form.Item
+                name="ministry_name"
+                label={<FieldLabel>اسم الوزارة</FieldLabel>}
+                style={{ marginBottom: 0 }}
+              >
+                <Input placeholder="مثال: وزارة العمل والشؤون الاجتماعية" style={{ borderRadius: 10, height: 40 }} />
+              </Form.Item>
+              <Form.Item
+                name="category"
+                label={<FieldLabel>الصنف</FieldLabel>}
+                style={{ marginBottom: 0 }}
+              >
+                <Select
+                  allowClear
+                  placeholder="اختر صنف الزبون"
+                  style={{ height: 40 }}
+                  options={categories.map(c => ({ value: c.name, label: c.name }))}
+                />
+              </Form.Item>
+
+              <Form.Item
+                name="link_to_platform"
+                valuePropName="checked"
+                style={{ marginBottom: 0, gridColumn: '1 / -1' }}
+              >
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 13,
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                }}>
+                  <input
+                    type="checkbox"
+                    onChange={e => form.setFieldValue('link_to_platform', e.target.checked)}
+                    style={{ width: 14, height: 14, accentColor: 'var(--brand)' }}
+                  />
+                  <Icon name="link" size={13} /> ربط الزبون بمنصة محددة
+                </label>
+              </Form.Item>
+
+              {linkToPlatform && (
+                <Form.Item
+                  name="platform_name"
+                  label={<FieldLabel>اسم المنصة <span style={{ color: 'var(--danger)' }}>*</span></FieldLabel>}
+                  rules={[{ required: true, message: 'اختر المنصة' }]}
+                  style={{ marginBottom: 0, gridColumn: '1 / -1' }}
+                >
+                  <Select
+                    allowClear
+                    placeholder="اختر المنصة"
+                    style={{ height: 40 }}
+                  >
+                    {platforms.map(p => <Select.Option key={p.id} value={p.name}>{p.name}</Select.Option>)}
+                  </Select>
+                </Form.Item>
+              )}
+            </div>
+          </Section>
+        </div>
+
+        {/* ============ Duration & auto reminder ============ */}
+        <div className="card" style={{ padding: 24, marginBottom: 14 }}>
+          <Section title="المدة والحالة">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <Form.Item
+                name="months_count"
+                label={<FieldLabel>المدة (بالأشهر)</FieldLabel>}
+                style={{ marginBottom: 0 }}
+              >
+                <div>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                    {monthsPresets.map(m => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => form.setFieldValue('months_count', m)}
+                        className={`btn btn--sm ${monthsCount === m ? 'btn--primary' : 'btn--ghost'}`}
+                        style={{ flex: 1, height: 32 }}
+                      >
+                        <span className="num">{m}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <InputNumber
+                    min={1}
+                    placeholder="أو أدخل عددًا مخصصًا"
+                    style={{ width: '100%', borderRadius: 10, height: 40 }}
+                    value={monthsCount}
+                    onChange={v => form.setFieldValue('months_count', v)}
+                    addonAfter="شهر"
+                  />
+                </div>
+              </Form.Item>
+
+              <Form.Item
+                name="status_note"
+                label={<FieldLabel>الحالة</FieldLabel>}
+                style={{ marginBottom: 0 }}
+              >
+                <Input placeholder="مثال: نشط، قيد المراجعة، معلّق..." style={{ borderRadius: 10, height: 40 }} />
+              </Form.Item>
+            </div>
+
+            {/* Auto-computed dates */}
+            {monthsCount && monthsCount > 0 && (
+              <div style={{
+                marginTop: 14,
+                padding: 14,
+                borderRadius: 10,
+                background: 'var(--info-bg)',
+                border: '1px solid var(--info-border)',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: 14,
+              }}>
+                <div>
+                  <div className="label-sm" style={{ marginBottom: 4 }}>تاريخ اليوم</div>
+                  <div className="num" style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {dayjs().format('YYYY-MM-DD')}
+                  </div>
+                </div>
+                <div>
+                  <div className="label-sm" style={{ marginBottom: 4 }}>تاريخ الانتهاء</div>
+                  <div className="num" style={{ fontSize: 14, fontWeight: 600, color: 'var(--danger)' }}>
+                    {endDate?.format('YYYY-MM-DD')}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {monthsCount && monthsCount > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <Form.Item
+                  name="reminder_before"
+                  label={<FieldLabel>تذكير قبل الانتهاء بـ</FieldLabel>}
+                  style={{ marginBottom: 0 }}
+                >
+                  <InputNumber
+                    min={1}
+                    max={Math.max(1, (monthsCount || 1) - 1)}
+                    placeholder="مثال: 2"
+                    style={{ width: '100%', borderRadius: 10, height: 40 }}
+                    addonAfter="شهر"
+                  />
+                </Form.Item>
+
+                {autoReminderDate && (
+                  <div style={{
+                    marginTop: 14,
+                    padding: '12px 14px',
+                    borderRadius: 10,
+                    background: 'var(--brand-tint)',
+                    border: '1px solid var(--brand-tint-hi)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                  }}>
+                    <Icon name="sparkles" size={14} style={{ color: 'var(--brand)' }} />
+                    <div style={{ fontSize: 12.5, color: 'var(--text-primary)' }}>
+                      سيتم إنشاء تذكير تلقائي بتاريخ{' '}
+                      <strong className="num" style={{ color: 'var(--brand)' }}>
+                        {autoReminderDate.format('YYYY-MM-DD')}
+                      </strong>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </Section>
+        </div>
+
+        {/* ============ Manual reminder ============ */}
+        <div className="card" style={{ padding: 24, marginBottom: 14 }}>
+          <Section title="تذكير يدوي إضافي (اختياري)">
+            <Form.Item name="has_reminder" valuePropName="checked" style={{ marginBottom: 0 }}>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 13,
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}>
+                <input
+                  type="checkbox"
+                  onChange={e => form.setFieldValue('has_reminder', e.target.checked)}
+                  style={{ width: 14, height: 14, accentColor: 'var(--brand)' }}
+                />
+                <Icon name="bell" size={13} /> تفعيل تذكير يدوي بتاريخ محدد
+              </label>
+            </Form.Item>
+
+            {hasReminder && (
+              <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 14 }}>
+                <Form.Item
+                  name="manual_reminder_date"
+                  label={<FieldLabel>تاريخ التذكير <span style={{ color: 'var(--danger)' }}>*</span></FieldLabel>}
+                  rules={[{ required: true, message: 'اختر التاريخ' }]}
+                  style={{ marginBottom: 0 }}
+                >
+                  <DatePicker style={{ width: '100%', borderRadius: 10, height: 40 }} placeholder="اختر تاريخ التذكير" />
+                </Form.Item>
+                <Form.Item
+                  name="manual_reminder_text"
+                  label={<FieldLabel>نص التذكير <span style={{ color: 'var(--danger)' }}>*</span></FieldLabel>}
+                  rules={[{ required: true, message: 'اكتب نص التذكير' }]}
+                  style={{ marginBottom: 0 }}
+                >
+                  <Input placeholder="مثال: متابعة الوثائق، تأكيد الشمول..." style={{ borderRadius: 10, height: 40 }} />
+                </Form.Item>
+              </div>
+            )}
+          </Section>
+        </div>
+
+        {/* ============ Notes ============ */}
+        <div className="card" style={{ padding: 24, marginBottom: 14 }}>
+          <Section title="ملاحظات">
+            <Form.Item name="notes" style={{ marginBottom: 0 }}>
+              <Input.TextArea
+                rows={4}
+                placeholder="أي ملاحظات خاصة بالزبون..."
+                style={{ borderRadius: 10, fontSize: 13, lineHeight: 1.7 }}
+              />
+            </Form.Item>
+          </Section>
+        </div>
+
+        {/* ============ Info tip ============ */}
+        <div style={{
+          padding: 14,
+          background: 'var(--brand-tint)',
+          border: '1px solid var(--brand-tint-hi)',
+          borderRadius: 10,
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 10,
+          marginBottom: 16,
+        }}>
+          <Icon name="sparkles" size={14} stroke={2} style={{ color: 'var(--brand)', marginTop: 2 }} />
+          <div style={{ fontSize: 12.5, lineHeight: 1.7, color: 'var(--text-primary)' }}>
+            سيتم إنشاء تذكير تلقائي قبل انتهاء المدة إذا حددت "تذكير قبل الانتهاء".
+            يمكنك تعديله لاحقًا من صفحة الزبون.
+          </div>
+        </div>
+
+        {/* ============ Action bar ============ */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: 16,
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          borderRadius: 14,
+          position: 'sticky',
+          bottom: 16,
+          zIndex: 5,
+          boxShadow: 'var(--shadow-sm)',
+        }}>
+          <button className="btn btn--ghost" onClick={() => navigate('/customers')} type="button">
+            إلغاء
+          </button>
+          <div style={{ flex: 1 }} />
+          <Button
+            type="primary"
+            onClick={handleSave}
+            loading={saving}
+            style={{
+              height: 42,
+              borderRadius: 10,
+              fontSize: 14,
+              fontWeight: 600,
+              background: 'var(--brand)',
+              borderColor: 'var(--brand-strong)',
+              padding: '0 24px',
+            }}
+          >
+            <Icon name="check" size={13} stroke={2.2} style={{ marginInlineEnd: 6 }} />
+            إضافة الزبون
           </Button>
         </div>
       </Form>

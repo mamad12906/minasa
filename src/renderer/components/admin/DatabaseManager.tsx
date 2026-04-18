@@ -25,13 +25,14 @@ export default function DatabaseManager() {
 
   const load = async () => {
     setLoading(true)
-    const [u, s] = await Promise.all([
-      window.api.users.list(),
-      window.api.dashboard.stats()
-    ])
-    setUsers(u || [])
-    setStats(s)
-    setLoading(false)
+    try {
+      const [u, s] = await Promise.all([
+        window.api.users.list(),
+        window.api.dashboard.stats()
+      ])
+      setUsers(u || [])
+      setStats(s)
+    } catch (err) { console.error('[DatabaseManager] Failed to load data:', err) } finally { setLoading(false) }
   }
 
   const getServerInfo = () => ({

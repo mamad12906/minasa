@@ -7,12 +7,7 @@ import {
   createReminder
 } from '../database/customers'
 import { logAudit } from '../database/audit'
-
-function addMonthsToDate(dateStr: string, months: number): string {
-  const d = new Date(dateStr)
-  d.setMonth(d.getMonth() + months)
-  return d.toISOString().split('T')[0]
-}
+import { calculateReminderDate, calculateExpiryDate } from '../../shared/reminder-utils'
 
 export function registerCustomerIPC(): void {
   ipcMain.handle('customer:list', (_event, params) => listCustomers(params))
@@ -25,11 +20,10 @@ export function registerCustomerIPC(): void {
     }
     if (input.months_count && input.months_count > 0) {
       const startDate = customer.created_at.split(' ')[0]
-      const endDate = addMonthsToDate(startDate, input.months_count)
-      const reminderBefore = input.reminder_before || 2
-      const reminderDate = input.reminder_date || addMonthsToDate(startDate, Math.max(input.months_count - reminderBefore, 0))
+      const endDate = calculateExpiryDate(startDate, input.months_count)
+      const reminderDate = input.reminder_date || calculateReminderDate(startDate, input.months_count, input.reminder_before || 2)
       const reminderText = input.reminder_text || `تذكير: انتهاء المدة (${input.months_count} شهر) بتاريخ ${endDate}`
-      createReminder(customer.id, reminderDate, reminderText)
+      if (reminderDate) createReminder(customer.id, reminderDate, reminderText)
     }
     logAudit(input.user_id || 0, '', 'إضافة', 'customer', customer.id, `إضافة زبون: ${customer.full_name}`)
     return customer

@@ -1,15 +1,10 @@
 import { Router } from 'express'
 import { pool } from '../db'
 import { AuthRequest, authMiddleware } from '../middleware/auth'
+import { calculateReminderDate, calculateExpiryDate } from '../utils/reminder-utils'
 
 const router = Router()
 router.use(authMiddleware)
-
-function addMonths(date: string, months: number): string {
-  const d = new Date(date)
-  d.setMonth(d.getMonth() + months)
-  return d.toISOString().split('T')[0]
-}
 
 // List customers
 router.get('/', async (req: AuthRequest, res) => {
@@ -91,13 +86,15 @@ router.post('/', async (req: AuthRequest, res) => {
   }
 
   if (input.months_count && input.months_count > 0) {
-    const startDate = customer.created_at.toISOString().split('T')[0]
-    const endDate = addMonths(startDate, input.months_count)
-    const reminderBefore = input.reminder_before || 2
-    const reminderDate = input.reminder_date || addMonths(startDate, Math.max(input.months_count - reminderBefore, 0))
+    const createdAt: Date = customer.created_at instanceof Date ? customer.created_at : new Date(customer.created_at)
+    const endDate = calculateExpiryDate(createdAt, input.months_count)
+    const computedReminder = calculateReminderDate(createdAt, input.months_count, input.reminder_before || 2)
+    const reminderDate = input.reminder_date || computedReminder
     const reminderText = input.reminder_text || `تذكير: انتهاء المدة (${input.months_count} شهر) بتاريخ ${endDate}`
-    await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)',
-      [customer.id, reminderDate, reminderText])
+    if (reminderDate) {
+      await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)',
+        [customer.id, reminderDate, reminderText])
+    }
   }
 
   res.json(customer)

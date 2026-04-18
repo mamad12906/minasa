@@ -84,10 +84,20 @@ export async function initDB() {
   // Create default admin (password is sha256 hashed)
   const admin = await pool.query("SELECT id FROM users WHERE role = 'admin' LIMIT 1")
   if (admin.rows.length === 0) {
+    // Generate secure random password and bcrypt hash (never store plain)
+    const crypto = await import('crypto')
+    const bcrypt = await import('bcryptjs')
+    const randomPw = crypto.randomBytes(9).toString('base64').replace(/[+/=]/g, '').substring(0, 12)
+    const hashedPw = await bcrypt.default.hash(randomPw, 10)
     await pool.query(
       "INSERT INTO users (username, password, display_name, role, permissions) VALUES ($1, $2, $3, $4, $5)",
-      ['admin', 'eb778f8ff7c8e4850f95aa12441aae3b27ea867bb6820e20e695352b897b95bf', 'مدير النظام', 'admin', '{}']
+      ['admin', hashedPw, 'مدير النظام', 'admin', '{}']
     )
+    console.log('\n' + '='.repeat(60))
+    console.log('INITIAL ADMIN CREDENTIALS (save immediately):')
+    console.log(`  username: admin`)
+    console.log(`  password: ${randomPw}`)
+    console.log('='.repeat(60) + '\n')
   }
 
   // Migrate: rehash admin password if it's still plain text

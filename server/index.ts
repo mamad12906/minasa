@@ -9,6 +9,7 @@ import userRoutes from './routes/users'
 import platformRoutes from './routes/platforms'
 import categoryRoutes from './routes/categories'
 import dashboardRoutes from './routes/dashboard'
+import mobileUpdateRoutes from './routes/mobile-update'
 
 dotenv.config()
 
@@ -16,17 +17,14 @@ const app = express()
 const PORT = process.env.PORT || 3000
 const API_KEY = process.env.API_KEY || ''
 
-app.use(cors())
+app.use(cors({ origin: true, credentials: true }))
 app.use(express.json({ limit: '50mb' }))
 
 // API Key protection - all /api/* routes require it
 app.use('/api', (req, res, next) => {
-  if (API_KEY) {
-    const clientKey = req.headers['x-api-key']
-    if (clientKey !== API_KEY) {
-      return res.status(403).json({ error: 'مفتاح API غير صالح' })
-    }
-  }
+  if (!API_KEY) { return res.status(500).json({ error: 'API_KEY not configured on server' }) }
+  const clientKey = req.headers['x-api-key']
+  if (clientKey !== API_KEY) { return res.status(403).json({ error: 'مفتاح API غير صالح' }) }
   next()
 })
 
@@ -50,6 +48,9 @@ app.use('/api', (req, res, next) => {
 // Health check (no API key needed)
 app.get('/', (_req, res) => res.json({ status: 'ok' }))
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
+
+// Mobile update - public (app needs it before login)
+app.use('/api/mobile', mobileUpdateRoutes)
 
 // Routes
 app.use('/api/auth', authRoutes)

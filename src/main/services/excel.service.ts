@@ -12,6 +12,20 @@ export interface ColumnMapping {
   [excelColumn: string]: string
 }
 
+// Parse date formats: "05/27/2025 11:03:52 AM" or "2025-05-27" -> "YYYY-MM-DD"
+export function parseDate(dateStr: string): string {
+  if (!dateStr) return ''
+  // Already ISO format
+  if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return dateStr.split('T')[0].split(' ')[0]
+  // MM/DD/YYYY format (with optional time)
+  const m = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+  if (m) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`
+  // DD-MM-YYYY format
+  const m2 = dateStr.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/)
+  if (m2) return `${m2[3]}-${m2[2].padStart(2, '0')}-${m2[1].padStart(2, '0')}`
+  return dateStr
+}
+
 export function readExcelHeaders(filePath: string): string[] {
   const workbook = XLSX.read(require('fs').readFileSync(filePath), { type: 'buffer' })
   const sheetName = workbook.SheetNames[0]
@@ -48,10 +62,15 @@ export function readExcelData(filePath: string): any[] {
 }
 
 export function importExcelData(filePath: string, mapping: ColumnMapping): ImportResult {
-  // Extract forced platform if present
+  // Extract special keys
   const forcePlatform = (mapping as any).__force_platform__ || ''
+  const hasHeaderRow = (mapping as any).__has_header_row__ !== false
+  const forceUserId = (mapping as any).__user_id__ || 0
   delete (mapping as any).__force_platform__
-  console.log('[import] Starting import. Platform:', forcePlatform)
+  delete (mapping as any).__has_header_row__
+  delete (mapping as any).__user_id__
+
+  // Import started
 
   let rows: any[]
   try {
@@ -65,7 +84,7 @@ export function importExcelData(filePath: string, mapping: ColumnMapping): Impor
     return { success: 0, failed: 0, errors: ['الملف فارغ أو لا يحتوي على بيانات'] }
   }
 
-  console.log('[import] Rows:', rows.length)
+  // Processing rows
   const db = getDatabase()
 
   let success = 0
@@ -76,7 +95,7 @@ export function importExcelData(filePath: string, mapping: ColumnMapping): Impor
   let customColNames: string[] = []
   try {
     customColNames = listCustomColumns('customers').map(c => c.column_name)
-  } catch (_) {}
+  } catch (err) { console.error('[excel:import] Failed to load custom columns:', err) }
 
   // Build SQL once
   const baseFields = ['platform_name', 'full_name', 'mother_name', 'phone_number', 'card_number', 'category', 'ministry_name', 'status_note', 'reminder_date', 'reminder_text', 'user_id', 'months_count', 'notes']
@@ -88,6 +107,7 @@ export function importExcelData(filePath: string, mapping: ColumnMapping): Impor
   // Prepare once, reuse for all rows
   const stmtCustomer = db.prepare(insertCustomerSQL)
   const stmtInvoice = db.prepare(insertInvoiceSQL)
+  const checkDup = db.prepare('SELECT id FROM customers WHERE full_name = ? AND mother_name = ? AND phone_number = ?')
 
   // Helper
   const getValue = (row: any, field: string): string => {
@@ -99,6 +119,16 @@ export function importExcelData(filePath: string, mapping: ColumnMapping): Impor
     }
     return ''
   }
+
+  // Check which invoice fields are mapped
+  const invoiceFields = ['total_amount', 'monthly_deduction', 'creation_date', 'status', 'remaining_amount', 'paid_amount']
+  const hasInvoiceData = invoiceFields.some(f => {
+    for (const dbField of Object.values(mapping)) { if (dbField === f) return true }
+    return false
+  })
+
+  let skipped = 0
+  let invoicesCreated = 0
 
   // Wrap ALL inserts in ONE transaction (fast: single disk write)
   const runImport = db.transaction(() => {
@@ -112,39 +142,59 @@ export function importExcelData(filePath: string, mapping: ColumnMapping): Impor
           continue
         }
 
+        const motherName = getValue(row, 'mother_name')
+        const phone = getValue(row, 'phone_number')
+
+        // Skip duplicate
+        const existing = checkDup.get(fullName, motherName, phone)
+        if (existing) { skipped++; continue }
+
+        const monthsCount = parseInt(getValue(row, 'months_count')) || 0
+
         const vals = [
           forcePlatform || getValue(row, 'platform_name'),
           fullName,
-          getValue(row, 'mother_name'),
-          getValue(row, 'phone_number'),
+          motherName,
+          phone,
           getValue(row, 'card_number'),
           getValue(row, 'category'),
           getValue(row, 'ministry_name'),
           getValue(row, 'status_note'),
-          getValue(row, 'reminder_date'),
+          parseDate(getValue(row, 'reminder_date')),
           getValue(row, 'reminder_text'),
-          parseInt(getValue(row, 'user_id')) || 0,
-          parseInt(getValue(row, 'months_count')) || 0,
+          forceUserId || parseInt(getValue(row, 'user_id')) || 0,
+          monthsCount,
           getValue(row, 'notes'),
           ...customColNames.map(c => getValue(row, c))
         ]
 
         const res = stmtCustomer.run(...vals)
+        success++
 
+        // Auto-create invoice if invoice data exists
         const invNum = getValue(row, 'invoice_number')
-        if (invNum) {
+        const totalAmount = parseFloat(getValue(row, 'total_amount')) || 0
+        const monthlyDeduction = parseFloat(getValue(row, 'monthly_deduction')) || 0
+        const creationDate = parseDate(getValue(row, 'creation_date'))
+        const invStatus = getValue(row, 'status')
+
+        if (hasInvoiceData && (invNum || totalAmount > 0)) {
+          const finalInvNum = invNum || `IMP-${Date.now()}-${i}`
+          const finalMonths = monthsCount || (monthlyDeduction > 0 ? Math.ceil(totalAmount / monthlyDeduction) : 1)
+          const finalDate = creationDate || new Date().toISOString().split('T')[0]
+          const finalStatus = invStatus || 'نشطة'
+
           stmtInvoice.run(
             res.lastInsertRowid,
-            invNum,
-            parseInt(getValue(row, 'total_months')) || 1,
-            parseFloat(getValue(row, 'total_amount')) || 0,
-            parseFloat(getValue(row, 'monthly_deduction')) || 0,
-            getValue(row, 'creation_date') || new Date().toISOString().split('T')[0],
-            getValue(row, 'status') || 'نشطة'
+            finalInvNum,
+            finalMonths,
+            totalAmount,
+            monthlyDeduction,
+            finalDate,
+            finalStatus
           )
+          invoicesCreated++
         }
-
-        success++
       } catch (err: any) {
         errors.push(`صف ${i + 2}: ${err.message}`)
         failed++
@@ -159,7 +209,10 @@ export function importExcelData(filePath: string, mapping: ColumnMapping): Impor
     errors.push(`خطأ في الحفظ: ${err.message}`)
   }
 
-  console.log('[import] Done. Success:', success, 'Failed:', failed)
+  if (skipped > 0) errors.unshift(`تم تخطي ${skipped} اسم مكرر`)
+  if (invoicesCreated > 0) errors.unshift(`تم إنشاء ${invoicesCreated} فاتورة تلقائياً`)
+
+  // Import complete
   return { success, failed, errors }
 }
 

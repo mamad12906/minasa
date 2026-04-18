@@ -52,7 +52,10 @@ export function addCustomColumn(input: CustomColumnInput): CustomColumn {
     VALUES (?, ?, ?, ?, ?)
   `).run(colName, input.display_name, input.column_type, input.table_name, maxOrder.max_order + 1)
 
-  // Add actual column to the target table
+  // Add actual column to the target table (validate table name)
+  const validTables = ['customers', 'invoices']
+  if (!validTables.includes(input.table_name)) throw new Error('Invalid table name')
+  if (!/^custom_\d+$/.test(colName)) throw new Error('Invalid column name')
   const defaultVal = input.column_type === 'number' ? '0' : "''"
   db.exec(`ALTER TABLE ${input.table_name} ADD COLUMN ${colName} TEXT DEFAULT ${defaultVal}`)
 
@@ -73,7 +76,10 @@ export function deleteCustomColumn(id: number): void {
   // SQLite doesn't support DROP COLUMN in older versions, but since v3.35+ it does.
   // We'll try it, and if it fails, we leave the column but remove metadata.
   try {
-    db.exec(`ALTER TABLE ${col.table_name} DROP COLUMN ${col.column_name}`)
+    const validTables = ['customers', 'invoices']
+    if (validTables.includes(col.table_name) && /^custom_\d+$/.test(col.column_name)) {
+      db.exec(`ALTER TABLE ${col.table_name} DROP COLUMN ${col.column_name}`)
+    }
   } catch {
     // Column remains in table but will be ignored since metadata is removed
   }

@@ -12,12 +12,15 @@ import AdminPanel from './components/admin/AdminPanel'
 import BackupPage from './components/backup/BackupPage'
 import AddCustomer from './components/customers/AddCustomer'
 import EditCustomer from './components/customers/EditCustomer'
+import CustomerDetailPage from './components/customers/CustomerDetailPage'
 import LoginPage from './components/admin/LoginPage'
 import AuditLog from './components/admin/AuditLog'
 import WhatsAppPage from './components/messaging/WhatsAppPage'
 import DatabaseManager from './components/admin/DatabaseManager'
 import InvoicePage from './components/invoices/InvoicePage'
 import ReportsPage from './components/reports/ReportsPage'
+import ErrorBoundary from './components/ErrorBoundary'
+import { TopbarProvider } from './components/layout/TopbarContext'
 
 // Expose api globally for all components
 ;(window as any).api = api
@@ -71,15 +74,17 @@ export default function App() {
   const can = (section: string) => {
     if (!user) return false
     if (user.role === 'admin') return true
-    return user.permissions[section] !== false
+    return user.permissions[section] === true
   }
   const toggleTheme = () => setIsDark(prev => !prev)
 
   return (
+    <ErrorBoundary>
     <ConfigProvider direction="rtl" locale={arEG} theme={isDark ? darkTheme : lightTheme}>
       <AntApp>
         <ThemeContext.Provider value={{ isDark, toggle: toggleTheme }}>
           <AuthContext.Provider value={{ user, login, logout, can }}>
+            <TopbarProvider>
             <HashRouter>
               {!user ? (
                 <LoginPage />
@@ -89,6 +94,7 @@ export default function App() {
                     <Route path="/" element={<AppLayout />}>
                       <Route index element={<Dashboard />} />
                       {can('customers') && <Route path="customers" element={<CustomerTable />} />}
+                      {can('customers') && <Route path="customer/:id" element={<CustomerDetailPage />} />}
                       {can('customers') && <Route path="add-customer" element={<AddCustomer />} />}
                       {can('customers') && <Route path="edit-customer/:id" element={<EditCustomer />} />}
                       {can('customers') && <Route path="invoices" element={<InvoicePage />} />}
@@ -106,9 +112,11 @@ export default function App() {
                 </>
               )}
             </HashRouter>
+            </TopbarProvider>
           </AuthContext.Provider>
         </ThemeContext.Provider>
       </AntApp>
     </ConfigProvider>
+    </ErrorBoundary>
   )
 }

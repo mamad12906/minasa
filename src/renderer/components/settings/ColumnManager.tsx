@@ -40,7 +40,7 @@ export default function ColumnManager() {
 
   const loadColumns = async () => {
     setLoading(true)
-    const cols = await window.api.columns.list()
+    try { const cols = await window.api.columns.list()
     setColumns(cols)
     setLoading(false)
   }

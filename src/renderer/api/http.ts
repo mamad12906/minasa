@@ -13,7 +13,7 @@ export async function loadPersistentConfig() {
       if (config.server_url) { BASE_URL = config.server_url; localStorage.setItem('minasa_server_url', BASE_URL) }
       if (config.api_key) { API_KEY = config.api_key; localStorage.setItem('minasa_api_key', API_KEY) }
     }
-  } catch {}
+  } catch (err) { console.error('[loadPersistentConfig] Failed to load config:', err) }
 }
 
 export function setApiKey(key: string) {
@@ -81,41 +81,65 @@ async function checkConnection(): Promise<boolean> {
     })
     IS_ONLINE = true
     return true
-  } catch {
+  } catch (err) {
+    console.error('[checkConnection] Server unreachable:', err)
     IS_ONLINE = false
     return false
   }
 }
 
-// Check connectivity periodically
-setInterval(async () => {
-  const wasOffline = !IS_ONLINE
-  await checkConnection()
-  if (wasOffline && IS_ONLINE) {
-    // Back online! Auto-push local customers to server
-    const ipc2 = (window as any).__ipc2
-    if (ipc2?.syncPushAll) {
-      ipc2.syncPushAll(BASE_URL, AUTH_TOKEN, API_KEY).catch(() => {})
-    }
-  }
-}, 15000)
+// Check connectivity periodically (cleanup on page unload / visibility hidden / explicit dispose)
+let connectivityInterval: any = null
+let initialCheckTimeout: any = null
 
-// Initial check
-setTimeout(() => checkConnection(), 2000)
+export function startConnectivityCheck() {
+  if (connectivityInterval) return
+  connectivityInterval = setInterval(async () => {
+    const wasOffline = !IS_ONLINE
+    await checkConnection()
+    if (wasOffline && IS_ONLINE) {
+      const ipc2 = (window as any).__ipc2
+      if (ipc2?.syncPushAll) ipc2.syncPushAll(BASE_URL, AUTH_TOKEN, API_KEY).catch(() => {})
+    }
+  }, 15000)
+}
+
+// Explicit disposer - usable from tests and from any cleanup path
+export function disposeConnectivityCheck() {
+  if (connectivityInterval) { clearInterval(connectivityInterval); connectivityInterval = null }
+  if (initialCheckTimeout) { clearTimeout(initialCheckTimeout); initialCheckTimeout = null }
+}
+
+startConnectivityCheck()
+initialCheckTimeout = setTimeout(() => { checkConnection(); initialCheckTimeout = null }, 2000)
+
+// Cleanup on page unload (Electron window close / refresh)
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', disposeConnectivityCheck)
+  // Also cleanup when the document is hidden (tab switch / minimize) - interval
+  // will be restarted when the page becomes visible again.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      disposeConnectivityCheck()
+    } else if (document.visibilityState === 'visible') {
+      startConnectivityCheck()
+    }
+  })
+}
 
 // ===== Hybrid API: try server, fallback to local =====
 
 async function hybridRead(serverFn: () => Promise<any>, localFn: () => Promise<any>) {
   // If online, try server first (always has latest data)
   if (IS_ONLINE && BASE_URL) {
-    try { return await serverFn() } catch { IS_ONLINE = false }
+    try { return await serverFn() } catch (err) { console.error('[hybridRead] Server request failed:', err); IS_ONLINE = false }
   }
   // Offline: fallback to local
   if (hasLocal()) {
     try {
       const localResult = await localFn()
       if (localResult != null) return localResult
-    } catch {}
+    } catch (err) { console.error('[hybridRead] Local fallback failed:', err) }
   }
   return null
 }
@@ -127,13 +151,13 @@ async function hybridWrite(
   // Write locally first (if available)
   let localResult = null
   if (hasLocal()) {
-    try { localResult = await localFn() } catch {}
+    try { localResult = await localFn() } catch (err) { console.error('[hybridWrite] Local write failed:', err) }
   }
 
   // Try server
   if (IS_ONLINE && BASE_URL) {
     try { return await serverFn() }
-    catch { IS_ONLINE = false }
+    catch (err) { console.error('[hybridWrite] Server write failed:', err); IS_ONLINE = false }
   }
 
   return localResult
@@ -223,12 +247,12 @@ export const api = {
             const ipc2 = (window as any).__ipc2
             if (ipc2?.syncPushAll) {
               ipc2.syncPushAll(BASE_URL, AUTH_TOKEN, API_KEY).then((r: any) => {
-                if (r?.synced > 0) console.log('[auto-sync] Pushed', r.synced, 'customers')
+                // auto-sync complete
               })
             }
           }, 3000)
           return res.user || null
-        } catch { IS_ONLINE = false }
+        } catch (err) { console.error('[login] Server login failed:', err); IS_ONLINE = false }
       }
       // Fallback to local login
       return local().users.login(username, password)

@@ -12,24 +12,51 @@ const BASE_DB_FIELDS = [
   { value: 'months_count', label: 'عدد الأشهر' }, { value: 'notes', label: 'ملاحظات' },
   { value: 'invoice_number', label: 'رقم الفاتورة' },
   { value: 'total_months', label: 'أشهر الفاتورة' }, { value: 'total_amount', label: 'المبلغ الكلي' },
+  { value: 'remaining_amount', label: 'المبلغ المتبقي' }, { value: 'paid_amount', label: 'المبلغ المدفوع' },
   { value: 'monthly_deduction', label: 'الاستقطاع الشهري' }, { value: 'creation_date', label: 'تاريخ الفاتورة' },
-  { value: 'status', label: 'حالة الفاتورة' }
+  { value: 'status', label: 'حالة الفاتورة' },
+  { value: 'platform_id', label: 'معرف المنصة' }, { value: 'operator_name', label: 'اسم المشغل' },
+  { value: 'operator_id', label: 'معرف المشغل' },
 ]
 
 const AUTO_MAP: Record<string, string> = {
+  // المنصة
   'اسم منصة': 'platform_name', 'المنصة': 'platform_name', 'اسم المنصة': 'platform_name',
-  'اسم زبون': 'full_name', 'اسم الزبون': 'full_name', 'الاسم': 'full_name', 'اسم زبون رباعي': 'full_name', 'الاسم الرباعي': 'full_name',
-  'اسم ام': 'mother_name', 'اسم الام': 'mother_name', 'اسم ام زبون': 'mother_name', 'اسم الأم': 'mother_name',
-  'هاتف': 'phone_number', 'رقم هاتف': 'phone_number', 'رقم الهاتف': 'phone_number', 'الهاتف': 'phone_number', 'موبايل': 'phone_number',
+  'معرف المنصة': 'platform_id',
+  // اسم الزبون
+  'اسم زبون': 'full_name', 'اسم الزبون': 'full_name', 'الاسم': 'full_name',
+  'اسم زبون رباعي': 'full_name', 'الاسم الرباعي': 'full_name',
+  // اسم الأم
+  'اسم ام': 'mother_name', 'اسم الام': 'mother_name', 'اسم ام زبون': 'mother_name',
+  'اسم الأم': 'mother_name', 'اسم ام الزبون': 'mother_name',
+  // الهاتف
+  'هاتف': 'phone_number', 'رقم هاتف': 'phone_number', 'رقم الهاتف': 'phone_number',
+  'الهاتف': 'phone_number', 'موبايل': 'phone_number', 'رقم هاتف الزبون': 'phone_number',
+  // رقم الفاتورة
   'رقم فاتورة': 'invoice_number', 'رقم الفاتورة': 'invoice_number',
-  'رقم بطاقة': 'card_number', 'رقم البطاقة': 'card_number', 'رقم بطاقة زبون': 'card_number', 'رقم بطاقة الزبون': 'card_number',
+  // رقم البطاقة
+  'رقم بطاقة': 'card_number', 'رقم البطاقة': 'card_number',
+  'رقم بطاقة زبون': 'card_number', 'رقم بطاقة الزبون': 'card_number', 'رقم بطاقة زبون': 'card_number',
+  // الصنف
   'صنف': 'category', 'الصنف': 'category', 'صنف الزبون': 'category',
+  // الوزارة
   'الوزارة': 'ministry_name', 'اسم الوزارة': 'ministry_name', 'وزارة': 'ministry_name',
-  'عدد الاشهر': 'months_count', 'عدد الأشهر': 'months_count',
+  // عدد الأشهر
+  'عدد الاشهر': 'months_count', 'عدد الأشهر': 'months_count', 'عدد اشهر': 'months_count',
+  // الحالة والملاحظات
   'الحالة': 'status_note', 'حالة': 'status_note', 'ملاحظات': 'notes', 'ملاحظة': 'notes',
-  'المبلغ الكلي': 'total_amount', 'استقطاع شهري': 'monthly_deduction', 'الاستقطاع الشهري': 'monthly_deduction',
+  // الفاتورة - المبالغ
+  'المبلغ الكلي': 'total_amount', 'المبلغ الكامل': 'total_amount',
+  'استقطاع شهري': 'monthly_deduction', 'الاستقطاع الشهري': 'monthly_deduction',
   'القسط': 'monthly_deduction', 'القسط الشهري': 'monthly_deduction',
-  'تاريخ الفاتورة': 'creation_date', 'حالة الفاتورة': 'status'
+  'المبلغ المتبقي': 'remaining_amount', 'المتبقي': 'remaining_amount',
+  'المبلغ المدفوع': 'paid_amount', 'المدفوع': 'paid_amount',
+  // الفاتورة - التاريخ والحالة
+  'تاريخ الفاتورة': 'creation_date', 'تاريخ انشاء الفاتورة': 'creation_date',
+  'تاريخ إنشاء الفاتورة': 'creation_date',
+  'حالة الفاتورة': 'status',
+  // المشغل
+  'اسم المشغل': 'operator_name', 'معرف المشغل': 'operator_id',
 }
 
 export default function ExcelImport() {
