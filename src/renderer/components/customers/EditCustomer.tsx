@@ -110,7 +110,7 @@ export default function EditCustomer() {
     return <div style={{ textAlign: 'center', padding: 100 }}><Spin size="large" /></div>
   }
 
-  const monthsPresets = [3, 6, 12, 24, 36]
+  const monthsPresets = [10, 18, 24, 36, 60]
 
   return (
     <div style={{ maxWidth: 980, margin: '0 auto' }}>
