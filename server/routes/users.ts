@@ -5,10 +5,20 @@ import { pool } from '../db'
 import { AuthRequest, authMiddleware, adminOnly } from '../middleware/auth'
 import { audit } from '../audit'
 import { validate, CreateUserSchema, UpdateUserSchema } from '../schemas'
+import { emitEvent } from '../events'
+import { snapshot as presenceSnapshot } from '../presence'
 
 const router = Router()
 router.use(authMiddleware)
 router.use(adminOnly)
+
+/**
+ * GET /api/users/online — map of userId → last-seen ms since epoch.
+ * The desktop admin panel uses this to render the "online now" dot.
+ */
+router.get('/online', async (_req, res) => {
+  res.json(presenceSnapshot())
+})
 
 router.get('/', async (_req, res) => {
   const r = await pool.query(`
@@ -30,6 +40,7 @@ router.post('/', validate(CreateUserSchema), async (req: AuthRequest, res) => {
     )
     await audit(req, 'create', 'user', r.rows[0].id,
       `created user ${username} (${display_name}) role=${role || 'user'}`)
+    emitEvent('user.created', req.user, r.rows[0].id, display_name)
     res.json(r.rows[0])
   } catch (err: any) {
     res.json({ error: err.message })
@@ -49,6 +60,8 @@ router.put('/:id', validate(UpdateUserSchema), async (req: AuthRequest, res) => 
   const r = await pool.query('SELECT * FROM users WHERE id = $1', [req.params.id])
   await audit(req, 'update', 'user', parseInt(req.params.id, 10),
     password ? 'updated user (password changed)' : 'updated user')
+  emitEvent('user.updated', req.user, r.rows[0]?.id ?? null,
+    r.rows[0]?.display_name || '')
   res.json(r.rows[0])
 })
 
@@ -57,6 +70,8 @@ router.delete('/:id', async (req: AuthRequest, res) => {
   await pool.query('DELETE FROM users WHERE id = $1', [req.params.id])
   await audit(req, 'delete', 'user', parseInt(req.params.id, 10),
     `deleted user ${victim.rows[0]?.username || ''}`)
+  emitEvent('user.deleted', req.user, parseInt(req.params.id, 10),
+    victim.rows[0]?.username || '')
   res.json({ success: true })
 })
 
@@ -80,6 +95,7 @@ router.post('/:id/reset-password', async (req: AuthRequest, res) => {
     await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashed, id])
     await audit(req, 'reset_password', 'user', id,
       `admin reset password for ${user.rows[0].username}`)
+    emitEvent('user.password_reset', req.user, id, user.rows[0].username)
     res.json({
       success: true,
       password: newPassword,

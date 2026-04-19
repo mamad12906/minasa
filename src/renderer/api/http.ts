@@ -292,6 +292,8 @@ export const api = {
       () => serverRequest('DELETE', `/api/users/${id}`),
       () => local().users.delete(id),
     ),
+    /** Map of userId → last-seen ms (server-side, in-memory). */
+    online: () => serverGet('/api/users/online'),
   },
 
   platforms: {

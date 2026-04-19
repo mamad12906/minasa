@@ -3,7 +3,8 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ConfigProvider, App as AntApp } from 'antd'
 import arEG from 'antd/locale/ar_EG'
 import { lightTheme, darkTheme } from './theme/antd-theme'
-import { api, clearToken } from './api/http'
+import { api, clearToken, getServerUrl, getToken, getApiKey } from './api/http'
+import { eventsStream } from './lib/events-stream'
 import AppLayout from './components/layout/AppLayout'
 import Dashboard from './components/dashboard/StatCards'
 import CustomerTable from './components/customers/CustomerTable'
@@ -70,7 +71,21 @@ export default function App() {
     setUser(u)
   }
 
-  const logout = () => { clearToken(); setUser(null) }
+  const logout = () => {
+    eventsStream.disconnect()
+    clearToken()
+    setUser(null)
+  }
+
+  // Keep an SSE connection open for admins so they see live activity without
+  // polling. Non-admin users don't have permission to read /api/events.
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      eventsStream.connect(getServerUrl(), getToken(), getApiKey())
+      return () => eventsStream.disconnect()
+    }
+    return undefined
+  }, [user?.id, user?.role])
   const can = (section: string) => {
     if (!user) return false
     if (user.role === 'admin') return true

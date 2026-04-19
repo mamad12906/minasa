@@ -3,6 +3,8 @@ import { Button, Modal, Form, Input, Select, Switch, Popconfirm, message, Empty,
 import dayjs from 'dayjs'
 import Icon, { IconName } from '../layout/Icon'
 import { useAuth } from '../../App'
+import LiveActivity from './LiveActivity'
+import { eventsStream } from '../../lib/events-stream'
 
 const SECTIONS = [
   { key: 'customers',       label: 'زبائن' },
@@ -16,6 +18,36 @@ const SECTIONS = [
 ]
 
 const EMPLOYEE_COLORS = ['#D4A574', '#60A5FA', '#A78BFA', '#4ADE80', '#FBBF24', '#F87171', '#2D6B55', '#7C3AED']
+
+// A user is "online now" if we saw them within the last 90 s.
+const ONLINE_WINDOW_MS = 90_000
+
+function renderPresenceDot(lastSeen: number | undefined): React.ReactNode {
+  if (!lastSeen) return null
+  const online = Date.now() - lastSeen < ONLINE_WINDOW_MS
+  if (!online) return null
+  return (
+    <span title="متصل الآن" style={{
+      position: 'absolute', bottom: -1, insetInlineEnd: -1,
+      width: 10, height: 10, borderRadius: 5,
+      background: 'var(--success)',
+      border: '2px solid var(--bg)',
+      boxShadow: '0 0 0 3px color-mix(in srgb, var(--success) 25%, transparent)',
+    }} />
+  )
+}
+
+function presenceLabel(lastSeen: number | undefined): string {
+  if (!lastSeen) return ''
+  const diffMs = Date.now() - lastSeen
+  if (diffMs < ONLINE_WINDOW_MS) return 'متصل الآن'
+  const min = Math.floor(diffMs / 60_000)
+  if (min < 60) return `منذ ${min}د`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `منذ ${hr}س`
+  const day = Math.floor(hr / 24)
+  return `منذ ${day}ي`
+}
 
 function initials(name?: string): string {
   if (!name) return '?'
@@ -50,6 +82,7 @@ export default function AdminPanel() {
   const [adminCategories, setAdminCategories] = useState<any[]>([])
   const [ministries, setMinistries] = useState<any[]>([])
   const [auditLog, setAuditLog] = useState<any[]>([])
+  const [onlineMap, setOnlineMap] = useState<Record<number, number>>({})
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editUser, setEditUser] = useState<any>(null)
@@ -64,6 +97,30 @@ export default function AdminPanel() {
     loadCategories()
     loadMinistries()
     loadAuditLog()
+    loadOnline()
+    // Refresh presence every 15 s so the "online now" dot stays current.
+    const id = setInterval(loadOnline, 15_000)
+    return () => clearInterval(id)
+  }, [])
+
+  const loadOnline = async () => {
+    try {
+      const res = await window.api.users.online()
+      setOnlineMap(res || {})
+    } catch { /* offline or non-admin — ignore */ }
+  }
+
+  // Live refresh: when the server broadcasts a mutation that affects what's
+  // on screen, re-pull so the admin sees it without reaching for the refresh
+  // button. Debounced implicitly because each loader is cheap and events
+  // arrive in small bursts.
+  useEffect(() => {
+    return eventsStream.on((e) => {
+      if (e.kind.startsWith('user.')) loadUsers()
+      else if (e.kind.startsWith('ministry.')) loadMinistries()
+      else if (e.kind.startsWith('platform.')) loadPlatforms()
+      else if (e.kind.startsWith('category.')) loadCategories()
+    })
   }, [])
 
   const loadUsers = async () => {
@@ -422,7 +479,7 @@ export default function AdminPanel() {
         </div>
       </div>
 
-      {/* ===== Users + recent changes ===== */}
+      {/* ===== Live activity + users ===== */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 14 }}>
         {/* Users table */}
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -468,13 +525,21 @@ export default function AdminPanel() {
                       <tr key={u.id}>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div className="avatar" style={{
-                              width: 30, height: 30, fontSize: 11,
-                              background: `${color}22`, color,
-                            }}>{initials(u.display_name)}</div>
+                            <div style={{ position: 'relative' }}>
+                              <div className="avatar" style={{
+                                width: 30, height: 30, fontSize: 11,
+                                background: `${color}22`, color,
+                              }}>{initials(u.display_name)}</div>
+                              {renderPresenceDot(onlineMap[u.id])}
+                            </div>
                             <div style={{ minWidth: 0 }}>
                               <div style={{ fontWeight: 500 }}>{u.display_name}</div>
-                              <div className="muted" style={{ fontSize: 11 }}>@{u.username}</div>
+                              <div className="muted" style={{ fontSize: 11 }}>
+                                @{u.username}
+                                {presenceLabel(onlineMap[u.id]) && (
+                                  <> · {presenceLabel(onlineMap[u.id])}</>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -564,54 +629,8 @@ export default function AdminPanel() {
           )}
         </div>
 
-        {/* Recent changes */}
-        <div className="card" style={{ padding: 22 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-            <Icon name="history" size={15} />
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>سجل التغييرات الأخير</h3>
-          </div>
-
-          {auditLog.length === 0 ? (
-            <Empty description="لا توجد تغييرات مسجّلة" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-          ) : (
-            <div style={{ maxHeight: 480, overflowY: 'auto' }}>
-              {auditLog.slice(0, 10).map((e: any, i: number) => {
-                const actor = users.find(u => u.id === e.user_id)
-                const userColor = actor ? colorFor(users.indexOf(actor)) : 'var(--brand)'
-                return (
-                  <div key={e.id || i} style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: 10,
-                    padding: '10px 0',
-                    borderBottom: i < Math.min(auditLog.length, 10) - 1 ? '1px solid var(--border-subtle)' : 'none',
-                  }}>
-                    <div className="avatar" style={{
-                      width: 26, height: 26, fontSize: 10,
-                      background: `${userColor}22`, color: userColor,
-                    }}>
-                      {initials(actor?.display_name || e.username)}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12.5 }}>
-                        <strong>{e.action || 'تحديث'}</strong>
-                        {e.target && <> · <span className="muted">{e.target}</span></>}
-                      </div>
-                      {e.details && (
-                        <div className="muted" style={{ fontSize: 11, marginTop: 2, lineHeight: 1.5 }}>
-                          {e.details}
-                        </div>
-                      )}
-                      <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
-                        {timeAgo(e.created_at)}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
+        {/* Live activity (server-pushed via SSE) */}
+        <LiveActivity max={25} />
       </div>
 
       {/* ===== Edit/Add user modal ===== */}

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
+import { touch } from '../presence'
 
 const JWT_SECRET = process.env.JWT_SECRET
 if (!JWT_SECRET) {
@@ -26,6 +27,7 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any
     req.user = decoded
+    touch(decoded?.id)
     next()
   } catch (e: any) {
     console.error('[authMiddleware] JWT verification failed:', e.message)

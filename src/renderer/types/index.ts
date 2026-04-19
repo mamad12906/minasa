@@ -153,6 +153,7 @@ declare global {
         create: (username: string, password: string, displayName: string, role: string, permissions: string, platformName: string) => Promise<UserData>
         update: (id: number, displayName: string, password: string | null, permissions: string, platformName: string) => Promise<UserData>
         delete: (id: number) => Promise<{ success: boolean }>
+        online: () => Promise<Record<number, number>>
       }
       platforms: {
         list: () => Promise<Platform[]>

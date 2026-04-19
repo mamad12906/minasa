@@ -10,6 +10,7 @@ import platformRoutes from './routes/platforms'
 import categoryRoutes from './routes/categories'
 import ministryRoutes from './routes/ministries'
 import auditRoutes from './routes/audit'
+import eventsRoutes from './routes/events'
 import dashboardRoutes from './routes/dashboard'
 import mobileUpdateRoutes from './routes/mobile-update'
 
@@ -78,6 +79,7 @@ app.use('/api/platforms', platformRoutes)
 app.use('/api/categories', categoryRoutes)
 app.use('/api/ministries', ministryRoutes)
 app.use('/api/audit', auditRoutes)
+app.use('/api/events', eventsRoutes)
 app.use('/api/dashboard', dashboardRoutes)
 
 async function start() {

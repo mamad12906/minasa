@@ -4,6 +4,7 @@ import { AuthRequest, authMiddleware } from '../middleware/auth'
 import { calculateReminderDate, calculateExpiryDate } from '../utils/reminder-utils'
 import { audit } from '../audit'
 import { validate, CreateCustomerSchema, UpdateCustomerSchema } from '../schemas'
+import { emitEvent } from '../events'
 
 const router = Router()
 router.use(authMiddleware)
@@ -102,6 +103,7 @@ router.post('/', validate(CreateCustomerSchema), async (req: AuthRequest, res) =
     }
   }
 
+  emitEvent('customer.created', req.user, customer.id, customer.full_name)
   res.json(customer)
 })
 
@@ -118,6 +120,7 @@ router.put('/:id', validate(UpdateCustomerSchema), async (req: AuthRequest, res)
     await pool.query('DELETE FROM reminders WHERE customer_id = $1 AND is_done = 0', [req.params.id])
     await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)', [req.params.id, input.reminder_date, input.reminder_text])
   }
+  emitEvent('customer.updated', req.user, result.rows[0].id, result.rows[0].full_name)
   res.json(result.rows[0])
 })
 
@@ -127,6 +130,8 @@ router.delete('/:id', async (req: AuthRequest, res) => {
   await pool.query('DELETE FROM customers WHERE id = $1', [req.params.id])
   await audit(req, 'delete', 'customer', parseInt(req.params.id, 10),
     `deleted customer ${existing.rows[0]?.full_name || ''}`)
+  emitEvent('customer.deleted', req.user, parseInt(req.params.id, 10),
+    existing.rows[0]?.full_name || '')
   res.json({ success: true })
 })
 

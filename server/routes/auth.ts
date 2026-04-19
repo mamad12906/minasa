@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { pool } from '../db'
 import { generateToken } from '../middleware/auth'
+import { emitEvent } from '../events'
 
 const router = Router()
 
@@ -55,10 +56,14 @@ router.post('/login', async (req, res) => {
 
   if (!valid) {
     await logLogin(user.id, user.username, 'login_failed', 'bad password', ip)
+    emitEvent('auth.login_failed', { id: user.id, username: user.username },
+      user.id, user.display_name || user.username, ip)
     return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور خطأ' })
   }
 
   await logLogin(user.id, user.username, 'login', '', ip)
+  emitEvent('auth.login', { id: user.id, username: user.username },
+    user.id, user.display_name || user.username, ip)
   const token = generateToken(user)
   res.json({ token, user: { id: user.id, username: user.username, display_name: user.display_name, role: user.role, permissions: user.permissions, platform_name: user.platform_name } })
 })
