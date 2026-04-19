@@ -125,6 +125,45 @@ export default function AdminPanel() {
     loadMinistries()
   }
 
+  const handleResetPassword = async (user: any) => {
+    try {
+      const res = await window.api.audit.resetUserPassword(user.id)
+      if ((res as any).error) {
+        message.error((res as any).error)
+        return
+      }
+      Modal.success({
+        title: `تم تعيين كلمة مرور جديدة للمستخدم "${user.display_name || user.username}"`,
+        content: (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ marginBottom: 8, color: 'var(--text-secondary)' }}>
+              انسخ كلمة المرور الآن — لن تُعرض مرة ثانية:
+            </div>
+            <div style={{
+              padding: 12,
+              background: 'var(--bg-elevated)',
+              borderRadius: 8,
+              fontFamily: 'monospace',
+              fontSize: 16,
+              fontWeight: 700,
+              textAlign: 'center',
+              userSelect: 'all',
+            }}>
+              {res.password}
+            </div>
+            <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
+              شارك كلمة المرور مع المستخدم عبر قناة آمنة. اطلب منه تغييرها بعد الدخول.
+            </div>
+          </div>
+        ),
+        okText: 'تم',
+        width: 440,
+      })
+    } catch (e: any) {
+      message.error(e?.message || 'فشل تعيين كلمة المرور')
+    }
+  }
+
   const handleAdd = () => {
     setEditUser(null)
     form.resetFields()
@@ -483,6 +522,22 @@ export default function AdminPanel() {
                             >
                               <Icon name="edit" size={13} />
                             </button>
+                            {u.id !== currentUser?.id && (
+                              <Popconfirm
+                                title="تعيين كلمة مرور جديدة؟"
+                                description="سيتم عرض كلمة المرور مرة واحدة."
+                                onConfirm={() => handleResetPassword(u)}
+                                okText="تعيين" cancelText="إلغاء"
+                              >
+                                <button
+                                  className="icon-btn"
+                                  style={{ width: 28, height: 28, color: 'var(--warning)' }}
+                                  title="تعيين كلمة مرور جديدة"
+                                >
+                                  <Icon name="lock" size={13} />
+                                </button>
+                              </Popconfirm>
+                            )}
                             {u.role !== 'admin' && u.id !== currentUser?.id && (
                               <Popconfirm
                                 title="حذف الموظف؟"

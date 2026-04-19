@@ -310,6 +310,14 @@ export const api = {
     ),
   },
 
+  audit: {
+    /// Fetch server-side audit log (admin-only). Returns {data, total}.
+    list: async ({ limit = 100, offset = 0 }: { limit?: number; offset?: number } = {}) =>
+      serverGet('/api/audit', { limit, offset }),
+    resetUserPassword: async (userId: number) =>
+      serverRequest('POST', `/api/users/${userId}/reset-password`),
+  },
+
   transfer: {
     customers: (ids: number[], targetPlatform: string) => hybridWrite(
       () => serverRequest('POST', '/api/customers/transfer', { customerIds: ids, targetPlatform }),

@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { pool } from '../db'
 import { AuthRequest, authMiddleware } from '../middleware/auth'
 import { calculateReminderDate, calculateExpiryDate } from '../utils/reminder-utils'
+import { audit } from '../audit'
 
 const router = Router()
 router.use(authMiddleware)
@@ -49,6 +50,7 @@ router.delete('/all/delete', async (req: AuthRequest, res) => {
   if (req.user!.role !== 'admin') return res.status(403).json({ error: 'admin only' })
   await pool.query('DELETE FROM reminders')
   const result = await pool.query('DELETE FROM customers')
+  await audit(req, 'delete_all', 'customer', null, `deleted ${result.rowCount} customers`)
   res.json({ success: true, deleted: result.rowCount })
 })
 
@@ -58,6 +60,8 @@ router.delete('/user/:userId/delete', async (req: AuthRequest, res) => {
   const userId = req.params.userId
   await pool.query('DELETE FROM reminders WHERE customer_id IN (SELECT id FROM customers WHERE user_id = $1)', [userId])
   const result = await pool.query('DELETE FROM customers WHERE user_id = $1', [userId])
+  await audit(req, 'delete_user_customers', 'user', parseInt(userId, 10),
+    `deleted ${result.rowCount} customers of user #${userId}`)
   res.json({ success: true, deleted: result.rowCount })
 })
 
@@ -118,7 +122,10 @@ router.put('/:id', async (req: AuthRequest, res) => {
 
 // Delete customer
 router.delete('/:id', async (req: AuthRequest, res) => {
+  const existing = await pool.query('SELECT full_name FROM customers WHERE id = $1', [req.params.id])
   await pool.query('DELETE FROM customers WHERE id = $1', [req.params.id])
+  await audit(req, 'delete', 'customer', parseInt(req.params.id, 10),
+    `deleted customer ${existing.rows[0]?.full_name || ''}`)
   res.json({ success: true })
 })
 

@@ -76,6 +76,18 @@ export async function initDB() {
       key TEXT PRIMARY KEY,
       value TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER,
+      username TEXT DEFAULT '',
+      action TEXT NOT NULL,
+      entity_type TEXT DEFAULT '',
+      entity_id INTEGER,
+      details TEXT DEFAULT '',
+      ip TEXT DEFAULT '',
+      created_at TIMESTAMP DEFAULT NOW()
+    );
   `)
 
   // Create indexes
@@ -85,6 +97,8 @@ export async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_customers_user_id ON customers(user_id);
     CREATE INDEX IF NOT EXISTS idx_reminders_date ON reminders(reminder_date);
     CREATE INDEX IF NOT EXISTS idx_reminders_done ON reminders(is_done);
+    CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id);
   `)
 
   // Create default admin (password is sha256 hashed)

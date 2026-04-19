@@ -169,6 +169,10 @@ declare global {
         add: (name: string) => Promise<any>
         delete: (id: number) => Promise<{ success: boolean }>
       }
+      audit: {
+        list: (opts?: { limit?: number; offset?: number }) => Promise<{ data: any[]; total: number }>
+        resetUserPassword: (userId: number) => Promise<{ success: boolean; password: string; username: string }>
+      }
       transfer: {
         customers: (ids: number[], targetPlatform: string) => Promise<{ success: boolean }>
       }
