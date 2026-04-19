@@ -4,6 +4,7 @@ import crypto from 'crypto'
 import { pool } from '../db'
 import { AuthRequest, authMiddleware, adminOnly } from '../middleware/auth'
 import { audit } from '../audit'
+import { validate, CreateUserSchema, UpdateUserSchema } from '../schemas'
 
 const router = Router()
 router.use(authMiddleware)
@@ -19,7 +20,7 @@ router.get('/', async (_req, res) => {
   res.json(r.rows)
 })
 
-router.post('/', async (req: AuthRequest, res) => {
+router.post('/', validate(CreateUserSchema), async (req: AuthRequest, res) => {
   const { username, password, display_name, role, permissions, platform_name } = req.body
   try {
     const hashed = bcrypt.hashSync(password, 10)
@@ -35,7 +36,7 @@ router.post('/', async (req: AuthRequest, res) => {
   }
 })
 
-router.put('/:id', async (req: AuthRequest, res) => {
+router.put('/:id', validate(UpdateUserSchema), async (req: AuthRequest, res) => {
   const { display_name, password, permissions, platform_name } = req.body
   if (password) {
     const hashed = bcrypt.hashSync(password, 10)

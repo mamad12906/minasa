@@ -3,6 +3,7 @@ import { pool } from '../db'
 import { AuthRequest, authMiddleware } from '../middleware/auth'
 import { calculateReminderDate, calculateExpiryDate } from '../utils/reminder-utils'
 import { audit } from '../audit'
+import { validate, CreateCustomerSchema, UpdateCustomerSchema } from '../schemas'
 
 const router = Router()
 router.use(authMiddleware)
@@ -73,7 +74,7 @@ router.get('/:id', async (req: AuthRequest, res) => {
 })
 
 // Create customer
-router.post('/', async (req: AuthRequest, res) => {
+router.post('/', validate(CreateCustomerSchema), async (req: AuthRequest, res) => {
   const input = req.body
   const userId = req.user!.role !== 'admin' ? req.user!.id : (input.user_id || req.user!.id)
 
@@ -105,7 +106,7 @@ router.post('/', async (req: AuthRequest, res) => {
 })
 
 // Update customer
-router.put('/:id', async (req: AuthRequest, res) => {
+router.put('/:id', validate(UpdateCustomerSchema), async (req: AuthRequest, res) => {
   const input = req.body
   const existing = await pool.query('SELECT user_id FROM customers WHERE id = $1', [req.params.id])
   const originalUserId = existing.rows[0]?.user_id || req.user!.id

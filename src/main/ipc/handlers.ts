@@ -72,5 +72,4 @@ export function registerAllIPC(): void {
   // First check after 30 seconds
   setTimeout(checkAndNotifyReminders, 30000)
 
-  // Sync handlers removed - sync now handled in index.ts
 }

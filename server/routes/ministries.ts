@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { pool } from '../db'
 import { AuthRequest, authMiddleware, adminOnly } from '../middleware/auth'
 import { audit } from '../audit'
+import { validate, NameOnlySchema } from '../schemas'
 
 const router = Router()
 router.use(authMiddleware)
@@ -11,10 +12,9 @@ router.get('/', async (_req, res) => {
   res.json(r.rows)
 })
 
-router.post('/', adminOnly, async (req: AuthRequest, res) => {
+router.post('/', adminOnly, validate(NameOnlySchema), async (req: AuthRequest, res) => {
   try {
-    const name = String(req.body.name || '').trim()
-    if (!name) return res.json({ error: 'اسم فارغ' })
+    const name = req.body.name.trim()
     await pool.query('INSERT INTO ministries (name) VALUES ($1) ON CONFLICT DO NOTHING', [name])
     await audit(req, 'create', 'ministry', null, `added ministry "${name}"`)
     res.json({ success: true })

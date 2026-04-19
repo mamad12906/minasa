@@ -34,6 +34,18 @@ export function isOnline() { return IS_ONLINE }
 // Load config immediately
 setTimeout(() => loadPersistentConfig(), 100)
 
+// Lazy import of antd `message` — avoids pulling antd into non-UI tests.
+let _toast: ((opts: { type: 'error' | 'warning'; content: string }) => void) | null = null
+async function notifyError(content: string) {
+  try {
+    if (!_toast) {
+      const antd = await import('antd')
+      _toast = (opts) => antd.message.open(opts)
+    }
+    _toast({ type: 'error', content })
+  } catch { /* antd unavailable — swallow */ }
+}
+
 // ===== Server HTTP Requests =====
 async function serverRequest(method: string, path: string, body?: any) {
   if (!BASE_URL) throw new Error('No server URL')
@@ -49,7 +61,15 @@ async function serverRequest(method: string, path: string, body?: any) {
   if (body && method !== 'GET') opts.body = JSON.stringify(body)
   const res = await fetch(url, opts)
   if (res.status === 401) { clearToken(); window.location.reload(); throw new Error('Unauthorized') }
-  return res.json()
+  const data = await res.json().catch(() => ({}))
+  // Surface server-side errors to the user (validation failures, 5xx, etc.).
+  // 2xx with `{error: ...}` is a legacy "soft error" we still want to show.
+  if (!res.ok || (data && typeof data === 'object' && data.error)) {
+    const msg = data?.error ?? `خطأ في السيرفر (${res.status})`
+    if (!res.ok) notifyError(msg)
+    if (!res.ok) throw new Error(msg)
+  }
+  return data
 }
 
 function serverGet(path: string, params?: Record<string, any>) {
