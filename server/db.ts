@@ -54,6 +54,21 @@ export async function initDB() {
       created_at TIMESTAMP DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS invoices (
+      id SERIAL PRIMARY KEY,
+      customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+      customer_name TEXT DEFAULT '',
+      customer_phone TEXT DEFAULT '',
+      amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+      paid_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'unpaid',
+      due_date TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      user_id INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS platforms (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
@@ -97,6 +112,9 @@ export async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_customers_user_id ON customers(user_id);
     CREATE INDEX IF NOT EXISTS idx_reminders_date ON reminders(reminder_date);
     CREATE INDEX IF NOT EXISTS idx_reminders_done ON reminders(is_done);
+    CREATE INDEX IF NOT EXISTS idx_invoices_customer ON invoices(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
+    CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id);
     CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id);
   `)

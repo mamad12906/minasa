@@ -103,6 +103,8 @@ router.post('/', validate(CreateCustomerSchema), async (req: AuthRequest, res) =
     }
   }
 
+  await audit(req, 'create', 'customer', customer.id,
+    `added customer ${customer.full_name}`)
   emitEvent('customer.created', req.user, customer.id, customer.full_name)
   res.json(customer)
 })
@@ -120,6 +122,8 @@ router.put('/:id', validate(UpdateCustomerSchema), async (req: AuthRequest, res)
     await pool.query('DELETE FROM reminders WHERE customer_id = $1 AND is_done = 0', [req.params.id])
     await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)', [req.params.id, input.reminder_date, input.reminder_text])
   }
+  await audit(req, 'update', 'customer', result.rows[0].id,
+    `edited customer ${result.rows[0].full_name}`)
   emitEvent('customer.updated', req.user, result.rows[0].id, result.rows[0].full_name)
   res.json(result.rows[0])
 })

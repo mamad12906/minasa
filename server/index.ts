@@ -4,6 +4,7 @@ import dotenv from 'dotenv'
 import { initDB } from './db'
 import authRoutes from './routes/auth'
 import customerRoutes from './routes/customers'
+import invoiceRoutes from './routes/invoices'
 import reminderRoutes from './routes/reminders'
 import userRoutes from './routes/users'
 import platformRoutes from './routes/platforms'
@@ -73,6 +74,7 @@ app.use('/api/mobile', mobileUpdateRoutes)
 // Routes
 app.use('/api/auth', authRoutes)
 app.use('/api/customers', customerRoutes)
+app.use('/api/invoices', invoiceRoutes)
 app.use('/api/reminders', reminderRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/platforms', platformRoutes)

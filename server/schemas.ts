@@ -49,6 +49,19 @@ export const NameOnlySchema = z.object({
   name: z.string().min(1).max(200),
 })
 
+export const CreateInvoiceSchema = z.object({
+  customer_id: z.number().int().positive(),
+  customer_name: z.string().max(200).optional(),
+  customer_phone: z.string().max(30).optional(),
+  amount: z.number().nonnegative(),
+  paid_amount: z.number().nonnegative().optional(),
+  status: z.string().max(20).optional(),
+  due_date: z.string().max(20).optional(),
+  notes: z.string().max(5000).optional(),
+})
+
+export const UpdateInvoiceSchema = CreateInvoiceSchema.partial()
+
 /**
  * Express middleware factory that validates `req.body` against a zod schema.
  * On failure, responds with 400 + a short Arabic message and the first error
