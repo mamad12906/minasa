@@ -159,6 +159,24 @@ async function cmdRestart(): Promise<string> {
   }
 }
 
+async function cmdUpdate(): Promise<string> {
+  try {
+    // The bot lives inside <repo>/server — step up to the repo root for git.
+    const pull = execSync('git pull --ff-only', {
+      encoding: 'utf-8',
+      cwd: '..',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim()
+
+    // tsx picks up new code on process restart; pm2 handles that cleanly.
+    execSync('pm2 restart minasa')
+
+    return `♻️ <b>تم التحديث وإعادة التشغيل</b>\n\n<code>${pull.slice(0, 1500) || 'no changes'}</code>`
+  } catch (e: any) {
+    return '❌ فشل التحديث: ' + (e.message || 'unknown').slice(0, 500)
+  }
+}
+
 async function cmdSearch(query: string): Promise<string> {
   try {
     const results = (await pool.query(
@@ -201,6 +219,7 @@ async function cmdHelp(): Promise<string> {
 /system - حالة النظام (ذاكرة، قرص)
 /logs - آخر السجلات
 /restart - إعادة تشغيل السيرفر
+/update - سحب آخر تحديث + إعادة التشغيل
 /backup - نسخ احتياطي لقاعدة البيانات
 /search [اسم أو رقم] - بحث عن زبون
 /help - هذه القائمة
@@ -282,6 +301,7 @@ async function main() {
           case '/system': reply = await cmdSystem(); break
           case '/logs': reply = await cmdLogs(); break
           case '/restart': reply = await cmdRestart(); break
+          case '/update': reply = await cmdUpdate(); break
           case '/backup': reply = await cmdBackup(); break
           case '/search':
             if (!args) { reply = '❌ اكتب: /search اسم أو رقم'; break }
