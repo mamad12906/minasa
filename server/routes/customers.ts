@@ -80,9 +80,9 @@ router.post('/', validate(CreateCustomerSchema), async (req: AuthRequest, res) =
   const userId = req.user!.role !== 'admin' ? req.user!.id : (input.user_id || req.user!.id)
 
   const result = await pool.query(
-    `INSERT INTO customers (platform_name, full_name, mother_name, phone_number, card_number, category, ministry_name, status_note, reminder_date, reminder_text, user_id, months_count, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
-    [input.platform_name||'', input.full_name, input.mother_name||'', input.phone_number||'', input.card_number||'', input.category||'', input.ministry_name||'', input.status_note||'', input.reminder_date||'', input.reminder_text||'', userId, input.months_count||0, input.notes||'']
+    `INSERT INTO customers (platform_name, full_name, mother_name, nickname, phone_number, card_number, category, ministry_name, status_note, reminder_date, reminder_text, user_id, months_count, notes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+    [input.platform_name||'', input.full_name, input.mother_name||'', input.nickname||'', input.phone_number||'', input.card_number||'', input.category||'', input.ministry_name||'', input.status_note||'', input.reminder_date||'', input.reminder_text||'', userId, input.months_count||0, input.notes||'']
   )
   const customer = result.rows[0]
 
@@ -115,17 +115,41 @@ router.put('/:id', validate(UpdateCustomerSchema), async (req: AuthRequest, res)
   const existing = await pool.query('SELECT user_id FROM customers WHERE id = $1', [req.params.id])
   const originalUserId = existing.rows[0]?.user_id || req.user!.id
   const result = await pool.query(
-    `UPDATE customers SET platform_name=$1, full_name=$2, mother_name=$3, phone_number=$4, card_number=$5, category=$6, ministry_name=$7, status_note=$8, reminder_date=$9, reminder_text=$10, user_id=$11, months_count=$12, notes=$13, updated_at=NOW() WHERE id=$14 RETURNING *`,
-    [input.platform_name||'', input.full_name, input.mother_name||'', input.phone_number||'', input.card_number||'', input.category||'', input.ministry_name||'', input.status_note||'', input.reminder_date||'', input.reminder_text||'', input.user_id || originalUserId, input.months_count||0, input.notes||'', req.params.id]
+    `UPDATE customers SET platform_name=$1, full_name=$2, mother_name=$3, nickname=$4, phone_number=$5, card_number=$6, category=$7, ministry_name=$8, status_note=$9, reminder_date=$10, reminder_text=$11, user_id=$12, months_count=$13, notes=$14, updated_at=NOW() WHERE id=$15 RETURNING *`,
+    [input.platform_name||'', input.full_name, input.mother_name||'', input.nickname||'', input.phone_number||'', input.card_number||'', input.category||'', input.ministry_name||'', input.status_note||'', input.reminder_date||'', input.reminder_text||'', input.user_id || originalUserId, input.months_count||0, input.notes||'', req.params.id]
   )
+  const customer = result.rows[0]
+
+  // Reminder sync — mirror CREATE behavior so edits ACTUALLY take effect.
+  // Previously we only inserted a new reminder when reminder_date+text were
+  // given, but never cleaned up the reminder that was auto-generated from the
+  // old months_count. Result: disabling duration left the old auto-reminder
+  // firing on its old schedule ("يبقى شغال على قديم"). Now we drop all
+  // pending reminders and re-create from the current input.
+  await pool.query('DELETE FROM reminders WHERE customer_id = $1 AND is_done = 0', [req.params.id])
+
   if (input.reminder_date && input.reminder_text) {
-    await pool.query('DELETE FROM reminders WHERE customer_id = $1 AND is_done = 0', [req.params.id])
-    await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)', [req.params.id, input.reminder_date, input.reminder_text])
+    await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)',
+      [req.params.id, input.reminder_date, input.reminder_text])
   }
-  await audit(req, 'update', 'customer', result.rows[0].id,
-    `edited customer ${result.rows[0].full_name}`)
-  emitEvent('customer.updated', req.user, result.rows[0].id, result.rows[0].full_name)
-  res.json(result.rows[0])
+
+  if (input.months_count && input.months_count > 0) {
+    const createdAt: Date = customer.created_at instanceof Date ? customer.created_at : new Date(customer.created_at)
+    const endDate = calculateExpiryDate(createdAt, input.months_count)
+    const computedReminder = calculateReminderDate(createdAt, input.months_count, input.reminder_before || 2)
+    const reminderDate = input.reminder_date || computedReminder
+    const reminderText = input.reminder_text || `تذكير: انتهاء المدة (${input.months_count} شهر) بتاريخ ${endDate}`
+    if (reminderDate && !(input.reminder_date && input.reminder_text)) {
+      // Only insert the auto-reminder if the manual one wasn't already inserted above.
+      await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)',
+        [req.params.id, reminderDate, reminderText])
+    }
+  }
+
+  await audit(req, 'update', 'customer', customer.id,
+    `edited customer ${customer.full_name}`)
+  emitEvent('customer.updated', req.user, customer.id, customer.full_name)
+  res.json(customer)
 })
 
 // Delete customer

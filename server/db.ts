@@ -25,6 +25,7 @@ export async function initDB() {
       platform_name TEXT DEFAULT '',
       full_name TEXT NOT NULL,
       mother_name TEXT DEFAULT '',
+      nickname TEXT DEFAULT '',
       phone_number TEXT DEFAULT '',
       card_number TEXT DEFAULT '',
       category TEXT DEFAULT '',
@@ -38,6 +39,9 @@ export async function initDB() {
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     );
+
+    -- Backfill nickname column on databases created before v1.7.10.
+    ALTER TABLE customers ADD COLUMN IF NOT EXISTS nickname TEXT DEFAULT '';
 
     CREATE TABLE IF NOT EXISTS reminders (
       id SERIAL PRIMARY KEY,

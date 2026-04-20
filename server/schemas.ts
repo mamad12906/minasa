@@ -27,7 +27,10 @@ export const UpdateUserSchema = z.object({
 export const CreateCustomerSchema = z.object({
   full_name: z.string().min(1).max(200),
   mother_name: z.string().max(200).optional(),
-  phone_number: z.string().max(30).optional(),
+  nickname: z.string().max(200).optional(),
+  // Phone is now required. Min 1 rejects blank strings — we accept any format
+  // so validators don't fight international numbers or legacy data.
+  phone_number: z.string().min(1, 'رقم الهاتف مطلوب').max(30),
   card_number: z.string().max(50).optional(),
   category: z.string().max(100).optional(),
   ministry_name: z.string().max(200).optional(),
@@ -43,6 +46,7 @@ export const CreateCustomerSchema = z.object({
 
 export const UpdateCustomerSchema = CreateCustomerSchema.partial().extend({
   full_name: z.string().min(1).max(200),
+  phone_number: z.string().min(1, 'رقم الهاتف مطلوب').max(30),
 })
 
 export const NameOnlySchema = z.object({
