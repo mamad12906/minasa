@@ -149,12 +149,21 @@ export async function initDB() {
     console.log('='.repeat(60) + '\n')
   }
 
-  // Migrate: rehash admin password if it's still plain text
+  // Rehash the admin's password if it's still plain text. A bcrypt hash is
+  // 60 chars and starts with `$2a$` / `$2b$`, so skip those — hashing a
+  // bcrypt string again just corrupts it (that bug silently shredded admin
+  // login every restart before v1.7.13). The login route auto-upgrades
+  // sha256/plain on first successful login, so we only patch PLAIN here.
   const adminUser = await pool.query("SELECT id, password FROM users WHERE username = 'admin' AND role = 'admin' LIMIT 1")
-  if (adminUser.rows.length > 0 && adminUser.rows[0].password.length < 64) {
-    const crypto = await import('crypto')
-    const hashed = crypto.createHash('sha256').update(adminUser.rows[0].password).digest('hex')
-    await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashed, adminUser.rows[0].id])
+  if (adminUser.rows.length > 0) {
+    const pw = adminUser.rows[0].password as string
+    const isBcrypt = pw.startsWith('$2a$') || pw.startsWith('$2b$')
+    const isSha256 = /^[a-f0-9]{64}$/i.test(pw)
+    if (!isBcrypt && !isSha256) {
+      const crypto = await import('crypto')
+      const hashed = crypto.createHash('sha256').update(pw).digest('hex')
+      await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashed, adminUser.rows[0].id])
+    }
   }
 
   console.log('Database initialized')
