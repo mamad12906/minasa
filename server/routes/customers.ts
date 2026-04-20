@@ -179,4 +179,30 @@ router.post('/transfer', async (req: AuthRequest, res) => {
   res.json({ success: true })
 })
 
+// Change customer owner — admin only. Simpler than going through PUT /:id
+// because the full-record update would otherwise need every required field.
+router.patch('/:id/owner', async (req: AuthRequest, res) => {
+  if (req.user!.role !== 'admin') return res.status(403).json({ error: 'admin only' })
+  const targetUserId = Number(req.body?.user_id)
+  if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
+    return res.status(400).json({ error: 'user_id غير صالح' })
+  }
+  const customerId = parseInt(req.params.id, 10)
+
+  const target = await pool.query('SELECT id, display_name FROM users WHERE id = $1', [targetUserId])
+  if (target.rows.length === 0) return res.status(400).json({ error: 'المستخدم الهدف غير موجود' })
+
+  const result = await pool.query(
+    'UPDATE customers SET user_id = $1, updated_at = NOW() WHERE id = $2 RETURNING full_name',
+    [targetUserId, customerId]
+  )
+  if (result.rows.length === 0) return res.status(404).json({ error: 'الزبون غير موجود' })
+  const name = result.rows[0].full_name
+
+  await audit(req, 'update', 'customer', customerId,
+    `transferred ${name} to ${target.rows[0].display_name}`)
+  emitEvent('customer.updated', req.user, customerId, name)
+  res.json({ success: true, user_id: targetUserId })
+})
+
 export default router
