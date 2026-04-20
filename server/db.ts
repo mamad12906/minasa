@@ -17,8 +17,15 @@ export async function initDB() {
       role TEXT NOT NULL DEFAULT 'user',
       permissions TEXT NOT NULL DEFAULT '{}',
       platform_name TEXT DEFAULT '',
+      password_version INTEGER NOT NULL DEFAULT 1,
       created_at TIMESTAMP DEFAULT NOW()
     );
+
+    -- Backfill password_version on databases predating v1.7.12.
+    -- Every password change bumps this; tokens carry the version they
+    -- were issued with and the middleware rejects stale values, so a
+    -- password reset invalidates any biometric-cached tokens immediately.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS password_version INTEGER NOT NULL DEFAULT 1;
 
     CREATE TABLE IF NOT EXISTS customers (
       id SERIAL PRIMARY KEY,
