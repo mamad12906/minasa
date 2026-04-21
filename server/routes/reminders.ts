@@ -28,7 +28,15 @@ router.get('/active', async (req: AuthRequest, res) => {
     where += ' AND c.user_id = $2'
     params.push(req.user!.id)
   }
-  const r = await pool.query(`SELECT r.*, c.full_name, c.phone_number, c.platform_name, c.ministry_name, c.status_note, c.user_id FROM reminders r JOIN customers c ON c.id = r.customer_id ${where} ORDER BY r.reminder_date ASC`, params)
+  const r = await pool.query(
+    `SELECT r.*, c.full_name, c.phone_number, c.platform_name, c.ministry_name, c.status_note, c.user_id,
+            COALESCE(u.display_name, u.username, '') AS created_by_name
+     FROM reminders r
+     JOIN customers c ON c.id = r.customer_id
+     LEFT JOIN users u ON u.id = r.user_id
+     ${where} ORDER BY r.reminder_date ASC`,
+    params,
+  )
   res.json(r.rows)
 })
 
@@ -40,7 +48,15 @@ router.get('/all', async (req: AuthRequest, res) => {
     where = 'c.user_id = $1'
     params.push(req.user!.id)
   }
-  const r = await pool.query(`SELECT r.*, c.full_name, c.phone_number, c.platform_name, c.ministry_name, c.status_note, c.user_id FROM reminders r JOIN customers c ON c.id = r.customer_id WHERE ${where} ORDER BY r.is_done ASC, r.reminder_date ASC`, params)
+  const r = await pool.query(
+    `SELECT r.*, c.full_name, c.phone_number, c.platform_name, c.ministry_name, c.status_note, c.user_id,
+            COALESCE(u.display_name, u.username, '') AS created_by_name
+     FROM reminders r
+     JOIN customers c ON c.id = r.customer_id
+     LEFT JOIN users u ON u.id = r.user_id
+     WHERE ${where} ORDER BY r.is_done ASC, r.reminder_date ASC`,
+    params,
+  )
   res.json(r.rows)
 })
 
@@ -75,8 +91,8 @@ router.post('/:id/reremind', async (req: AuthRequest, res) => {
   const r = await pool.query('SELECT * FROM reminders WHERE id = $1', [req.params.id])
   const orig = r.rows[0]
   if (orig) {
-    await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text, original_date, is_postponed, postpone_reason) VALUES ($1,$2,$3,$4,1,$5)',
-      [orig.customer_id, new_date, orig.reminder_text, orig.reminder_date, reason])
+    await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text, original_date, is_postponed, postpone_reason, user_id) VALUES ($1,$2,$3,$4,1,$5,$6)',
+      [orig.customer_id, new_date, orig.reminder_text, orig.reminder_date, reason, req.user!.id])
     const name = await reminderCustomerName(req.params.id)
     await audit(req, 'create', 'reminder', null,
       `re-reminded for ${new_date} (${name})`)

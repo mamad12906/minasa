@@ -45,8 +45,11 @@ router.get('/', async (req: AuthRequest, res) => {
     params
   )
   const dataResult = await pool.query(
-    `SELECT i.*, TO_CHAR(i.created_at, 'YYYY-MM-DD HH24:MI') as created_at_fmt
-     FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+    `SELECT i.*, TO_CHAR(i.created_at, 'YYYY-MM-DD HH24:MI') as created_at_fmt,
+            COALESCE(u.display_name, u.username, '') AS created_by_name
+     FROM invoices i
+     LEFT JOIN customers c ON c.id = i.customer_id
+     LEFT JOIN users u ON u.id = i.user_id
      ${where} ORDER BY i.created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
     [...params, Number(pageSize), offset]
   )

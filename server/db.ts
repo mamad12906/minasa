@@ -62,8 +62,12 @@ export async function initDB() {
       is_postponed INTEGER DEFAULT 0,
       postpone_reason TEXT DEFAULT '',
       original_date TEXT DEFAULT '',
+      user_id INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT NOW()
     );
+
+    -- Track which user created each reminder so the UI can show it (added 2026-04-21).
+    ALTER TABLE reminders ADD COLUMN IF NOT EXISTS user_id INTEGER DEFAULT 0;
 
     CREATE TABLE IF NOT EXISTS invoices (
       id SERIAL PRIMARY KEY,
@@ -128,6 +132,7 @@ export async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_customers_user_id ON customers(user_id);
     CREATE INDEX IF NOT EXISTS idx_reminders_date ON reminders(reminder_date);
     CREATE INDEX IF NOT EXISTS idx_reminders_done ON reminders(is_done);
+    CREATE INDEX IF NOT EXISTS idx_reminders_user ON reminders(user_id);
     CREATE INDEX IF NOT EXISTS idx_invoices_customer ON invoices(customer_id);
     CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
     CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id);

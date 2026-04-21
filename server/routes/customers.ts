@@ -88,7 +88,7 @@ router.post('/', validate(CreateCustomerSchema), async (req: AuthRequest, res) =
 
   if (input.reminder_date && input.reminder_text) {
     await pool.query('DELETE FROM reminders WHERE customer_id = $1 AND is_done = 0', [customer.id])
-    await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)', [customer.id, input.reminder_date, input.reminder_text])
+    await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text, user_id) VALUES ($1, $2, $3, $4)', [customer.id, input.reminder_date, input.reminder_text, req.user!.id])
   }
 
   if (input.months_count && input.months_count > 0) {
@@ -98,8 +98,8 @@ router.post('/', validate(CreateCustomerSchema), async (req: AuthRequest, res) =
     const reminderDate = input.reminder_date || computedReminder
     const reminderText = input.reminder_text || `تذكير: انتهاء المدة (${input.months_count} شهر) بتاريخ ${endDate}`
     if (reminderDate) {
-      await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)',
-        [customer.id, reminderDate, reminderText])
+      await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text, user_id) VALUES ($1, $2, $3, $4)',
+        [customer.id, reminderDate, reminderText, req.user!.id])
     }
   }
 
@@ -136,8 +136,8 @@ router.put('/:id', validate(UpdateCustomerSchema), async (req: AuthRequest, res)
 
   if (hasManualReminder) {
     await pool.query(
-      'INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)',
-      [req.params.id, input.reminder_date, input.reminder_text])
+      'INSERT INTO reminders (customer_id, reminder_date, reminder_text, user_id) VALUES ($1, $2, $3, $4)',
+      [req.params.id, input.reminder_date, input.reminder_text, req.user!.id])
   }
 
   if (hasMonthsReminder) {
@@ -153,8 +153,8 @@ router.put('/:id', validate(UpdateCustomerSchema), async (req: AuthRequest, res)
     if (reminderDate && !hasManualReminder) {
       // Only insert the auto-reminder if the manual one wasn't already inserted above.
       await pool.query(
-        'INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)',
-        [req.params.id, reminderDate, reminderText])
+        'INSERT INTO reminders (customer_id, reminder_date, reminder_text, user_id) VALUES ($1, $2, $3, $4)',
+        [req.params.id, reminderDate, reminderText, req.user!.id])
     }
   }
 
