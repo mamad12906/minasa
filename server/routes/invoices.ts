@@ -86,9 +86,9 @@ router.post('/', validate(CreateInvoiceSchema), async (req: AuthRequest, res) =>
   const phone = input.customer_phone || customer.phone_number || ''
 
   const result = await pool.query(
-    `INSERT INTO invoices (customer_id, customer_name, customer_phone, amount, paid_amount, status, due_date, notes, user_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-    [input.customer_id, name, phone, amount, paid, status, input.due_date || '', input.notes || '', req.user!.id]
+    `INSERT INTO invoices (customer_id, customer_name, customer_phone, platform_name, amount, paid_amount, status, due_date, notes, user_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    [input.customer_id, name, phone, input.platform_name || '', amount, paid, status, input.due_date || '', input.notes || '', req.user!.id]
   )
   const invoice = result.rows[0]
 
@@ -116,17 +116,19 @@ router.put('/:id', validate(UpdateInvoiceSchema), async (req: AuthRequest, res) 
        customer_id = $1,
        customer_name = $2,
        customer_phone = $3,
-       amount = $4,
-       paid_amount = $5,
-       status = $6,
-       due_date = $7,
-       notes = $8,
+       platform_name = $4,
+       amount = $5,
+       paid_amount = $6,
+       status = $7,
+       due_date = $8,
+       notes = $9,
        updated_at = NOW()
-     WHERE id = $9 RETURNING *`,
+     WHERE id = $10 RETURNING *`,
     [
       input.customer_id ?? cur.customer_id,
       input.customer_name ?? cur.customer_name,
       input.customer_phone ?? cur.customer_phone,
+      input.platform_name ?? cur.platform_name,
       amount,
       paid,
       status,

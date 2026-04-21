@@ -57,6 +57,7 @@ export const CreateInvoiceSchema = z.object({
   customer_id: z.number().int().positive(),
   customer_name: z.string().max(200).optional(),
   customer_phone: z.string().max(30).optional(),
+  platform_name: z.string().max(200).optional(),
   amount: z.number().nonnegative(),
   paid_amount: z.number().nonnegative().optional(),
   status: z.string().max(20).optional(),

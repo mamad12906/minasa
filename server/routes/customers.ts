@@ -120,28 +120,40 @@ router.put('/:id', validate(UpdateCustomerSchema), async (req: AuthRequest, res)
   )
   const customer = result.rows[0]
 
-  // Reminder sync — mirror CREATE behavior so edits ACTUALLY take effect.
-  // Previously we only inserted a new reminder when reminder_date+text were
-  // given, but never cleaned up the reminder that was auto-generated from the
-  // old months_count. Result: disabling duration left the old auto-reminder
-  // firing on its old schedule ("يبقى شغال على قديم"). Now we drop all
-  // pending reminders and re-create from the current input.
-  await pool.query('DELETE FROM reminders WHERE customer_id = $1 AND is_done = 0', [req.params.id])
+  // Reminder sync — only touch the reminder table when the caller actually
+  // supplied reminder data. Editing unrelated fields (name, phone, etc.)
+  // must preserve existing reminders untouched.
+  const hasManualReminder = input.reminder_date && input.reminder_text
+  const hasMonthsReminder = input.months_count && input.months_count > 0
 
-  if (input.reminder_date && input.reminder_text) {
-    await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)',
+  if (hasManualReminder || hasMonthsReminder) {
+    // User is replacing reminders — drop pending ones first so the old
+    // auto-generated reminder doesn't keep firing on its old schedule.
+    await pool.query(
+      'DELETE FROM reminders WHERE customer_id = $1 AND is_done = 0',
+      [req.params.id])
+  }
+
+  if (hasManualReminder) {
+    await pool.query(
+      'INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)',
       [req.params.id, input.reminder_date, input.reminder_text])
   }
 
-  if (input.months_count && input.months_count > 0) {
-    const createdAt: Date = customer.created_at instanceof Date ? customer.created_at : new Date(customer.created_at)
+  if (hasMonthsReminder) {
+    const createdAt: Date = customer.created_at instanceof Date
+      ? customer.created_at
+      : new Date(customer.created_at)
     const endDate = calculateExpiryDate(createdAt, input.months_count)
-    const computedReminder = calculateReminderDate(createdAt, input.months_count, input.reminder_before || 2)
+    const computedReminder = calculateReminderDate(
+      createdAt, input.months_count, input.reminder_before || 2)
     const reminderDate = input.reminder_date || computedReminder
-    const reminderText = input.reminder_text || `تذكير: انتهاء المدة (${input.months_count} شهر) بتاريخ ${endDate}`
-    if (reminderDate && !(input.reminder_date && input.reminder_text)) {
+    const reminderText = input.reminder_text
+      || `تذكير: انتهاء المدة (${input.months_count} شهر) بتاريخ ${endDate}`
+    if (reminderDate && !hasManualReminder) {
       // Only insert the auto-reminder if the manual one wasn't already inserted above.
-      await pool.query('INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)',
+      await pool.query(
+        'INSERT INTO reminders (customer_id, reminder_date, reminder_text) VALUES ($1, $2, $3)',
         [req.params.id, reminderDate, reminderText])
     }
   }

@@ -70,6 +70,7 @@ export async function initDB() {
       customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
       customer_name TEXT DEFAULT '',
       customer_phone TEXT DEFAULT '',
+      platform_name TEXT DEFAULT '',
       amount NUMERIC(14,2) NOT NULL DEFAULT 0,
       paid_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'unpaid',
@@ -79,6 +80,10 @@ export async function initDB() {
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     );
+
+    -- Platform moved from customer to invoice as of 2026-04-21. Backfill
+    -- the column on existing databases.
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS platform_name TEXT DEFAULT '';
 
     CREATE TABLE IF NOT EXISTS platforms (
       id SERIAL PRIMARY KEY,
