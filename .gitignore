@@ -1,9 +1,10 @@
 node_modules/
-dist/
-out/
 server/node_modules/
 server/.env
 *.db
 *.db-wal
 *.db-shm
 .env
+
+# Claude Code local state (IDE tooling, not part of the project)
+.claude/
