@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Spin, Empty, Modal, Form, Input, Select, DatePicker, Checkbox, message, Popconfirm } from 'antd'
+import { Spin, Modal, Form, Input, Select, DatePicker, Checkbox, message, Popconfirm } from 'antd'
 import dayjs from 'dayjs'
 import type { Customer, CustomColumn } from '../../types'
 import { useAuth } from '../../App'
 import Icon from '../layout/Icon'
+import RemindersList from './detail/RemindersList'
+import InvoicesCard from './detail/InvoicesCard'
+import HistoryCard from './detail/HistoryCard'
+import { printCustomerCard } from './detail/printCustomerCard'
 
 function initials(name?: string): string {
   if (!name) return '?'
@@ -95,34 +99,7 @@ export default function CustomerDetailPage() {
   }
 
   const printCard = () => {
-    if (!customer) return
-    const endDate = customer.months_count && customer.created_at
-      ? dayjs(customer.created_at).add(customer.months_count, 'month').format('YYYY-MM-DD')
-      : '-'
-    const w = window.open('', '_blank', 'width=600,height=800')
-    if (!w) return
-    w.document.write(`<html dir="rtl"><head><title>بطاقة زبون</title>
-      <style>body{font-family:'Segoe UI',Tahoma,Arial;padding:30px;color:#1A1F1C}
-      h1{text-align:center;color:#0F4C3A;border-bottom:3px solid #0F4C3A;padding-bottom:10px}
-      table{width:100%;border-collapse:collapse;margin-top:20px}
-      td,th{padding:10px 14px;border:1px solid #E2DED5;text-align:right}
-      th{background:#F7F5F0;font-weight:600;width:35%}
-      .f{text-align:center;margin-top:30px;color:#94A3B8;font-size:12px}</style></head><body>
-      <h1>بطاقة زبون - منصة</h1><table>
-      <tr><th>الاسم</th><td>${customer.full_name}</td></tr>
-      <tr><th>اسم الأم</th><td>${customer.mother_name || '-'}</td></tr>
-      <tr><th>الهاتف</th><td>${customer.phone_number || '-'}</td></tr>
-      <tr><th>البطاقة</th><td>${customer.card_number || '-'}</td></tr>
-      <tr><th>المنصة</th><td>${customer.platform_name || '-'}</td></tr>
-      <tr><th>الوزارة</th><td>${customer.ministry_name || '-'}</td></tr>
-      <tr><th>الصنف</th><td>${customer.category || '-'}</td></tr>
-      <tr><th>الحالة</th><td>${customer.status_note || '-'}</td></tr>
-      <tr><th>الأشهر</th><td>${customer.months_count || '-'}</td></tr>
-      <tr><th>الانتهاء</th><td>${endDate}</td></tr>
-      <tr><th>ملاحظات</th><td>${customer.notes || '-'}</td></tr>
-      </table><div class="f">طُبعت ${dayjs().format('YYYY-MM-DD')} | منصة</div></body></html>`)
-    w.document.close()
-    setTimeout(() => w.print(), 500)
+    if (customer) printCustomerCard(customer)
   }
 
   const handleDelete = async () => {
@@ -278,70 +255,12 @@ export default function CustomerDetailPage() {
             </div>
           </div>
 
-          {/* Reminders */}
-          <div className="card" style={{ padding: 22 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>سجل التذكيرات</h3>
-              <button
-                className="btn btn--ghost btn--sm"
-                onClick={() => navigate(`/edit-customer/${customer.id}`)}
-              >
-                <Icon name="plus" size={12} stroke={2.3} /> تذكير جديد
-              </button>
-            </div>
-
-            {remindersLoading ? (
-              <div style={{ textAlign: 'center', padding: 20 }}><Spin /></div>
-            ) : reminders.length === 0 ? (
-              <Empty description="لا توجد تذكيرات لهذا الزبون" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {reminders.map((r: any) => {
-                  const isDone = r.is_done === 1
-                  const isDue = !isDone && r.reminder_date <= today
-                  const tone = isDone ? 'success' : isDue ? 'warning' : 'info'
-                  const label = isDone ? 'تم' : isDue ? 'مستحق' : 'قادم'
-                  const iconName = isDone ? 'check' : isDue ? 'bell' : 'clock'
-
-                  return (
-                    <div key={r.id} style={{
-                      padding: 14,
-                      borderRadius: 10,
-                      background: `var(--${tone}-bg)`,
-                      border: `1px solid var(--${tone}-border)`,
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 10 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500, fontSize: 13.5, minWidth: 0 }}>
-                          <Icon name={iconName} size={14} />
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.reminder_text}</span>
-                        </div>
-                        <span className={`chip chip--${tone}`} style={{ fontSize: 10.5, flexShrink: 0 }}>{label}</span>
-                      </div>
-                      <div className="num" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        {r.reminder_date}
-                        {r.original_date && r.original_date !== r.reminder_date && (
-                          <> · <span style={{ textDecoration: 'line-through', opacity: 0.6 }}>{r.original_date}</span></>
-                        )}
-                        {r.is_postponed === 1 && r.postpone_reason && (
-                          <> · <span style={{ color: 'var(--warning)' }}>{r.postpone_reason}</span></>
-                        )}
-                        {isDone && r.handled_by && <> · {r.handle_method} · {r.handled_by}</>}
-                      </div>
-                      {!isDone && isDue && (
-                        <button
-                          className="btn btn--primary btn--sm"
-                          onClick={() => openHandleModal(r)}
-                          style={{ marginTop: 8 }}
-                        >
-                          <Icon name="check" size={11} /> تعامل مع التذكير
-                        </button>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
+          <RemindersList
+            customerId={customer.id}
+            reminders={reminders}
+            loading={remindersLoading}
+            onOpenHandle={openHandleModal}
+          />
         </div>
 
         {/* ===== RIGHT: Sidebar column ===== */}
@@ -406,116 +325,9 @@ export default function CustomerDetailPage() {
             </div>
           )}
 
-          {/* Invoices */}
-          <div className="card" style={{ padding: 22 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Icon name="invoice" size={14} />
-                <h4 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>الفواتير</h4>
-              </div>
-              <span className="chip chip--neutral" style={{ fontSize: 10.5 }}>
-                <span className="num">{invoices.length}</span>
-              </span>
-            </div>
-            {invoices.length === 0 ? (
-              <div style={{
-                padding: '20px 10px',
-                textAlign: 'center',
-                color: 'var(--text-muted)',
-                fontSize: 12.5,
-              }}>
-                لا توجد فواتير
-              </div>
-            ) : (
-              <>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {invoices.slice(0, 5).map((f: any, i: number) => {
-                    const sTone = f.status === 'مدفوعة' ? 'success'
-                      : f.status === 'معلّقة' || f.status === 'معلقة' ? 'warning'
-                      : f.status === 'متأخرة' ? 'danger'
-                      : 'neutral'
-                    return (
-                      <div key={f.id} style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '10px 0',
-                        borderBottom: i < Math.min(invoices.length, 5) - 1 ? '1px solid var(--border-subtle)' : 'none',
-                      }}>
-                        <div style={{ minWidth: 0 }}>
-                          <div className="mono" style={{ fontSize: 12.5, fontWeight: 500 }}>
-                            #{f.invoice_number}
-                          </div>
-                          <div className="num muted" style={{ fontSize: 11, marginTop: 2 }}>
-                            {Number(f.total_amount || 0).toLocaleString('en-US')} د.ع
-                          </div>
-                        </div>
-                        <span className={`chip chip--${sTone}`} style={{ fontSize: 10.5, flexShrink: 0 }}>
-                          {f.status || 'مسودة'}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-                <button
-                  className="btn btn--ghost btn--sm"
-                  style={{ width: '100%', marginTop: 10 }}
-                  onClick={() => navigate('/invoices')}
-                >
-                  عرض جميع الفواتير
-                </button>
-              </>
-            )}
-          </div>
+          <InvoicesCard invoices={invoices} />
 
-          {/* History — always visible */}
-          <div className="card" style={{ padding: 22 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <Icon name="history" size={14} />
-              <h4 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>سجل التعديلات</h4>
-            </div>
-            {history.length === 0 ? (
-              <div style={{
-                padding: '20px 10px',
-                textAlign: 'center',
-                color: 'var(--text-muted)',
-                fontSize: 12.5,
-              }}>
-                لا توجد تعديلات مسجّلة
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 320, overflowY: 'auto' }}>
-                {history.map((h: any, i: number) => {
-                  const aTone = h.action === 'إضافة' ? 'success'
-                    : h.action === 'حذف' ? 'danger'
-                    : h.action === 'تعديل' ? 'info'
-                    : 'neutral'
-                  return (
-                    <div key={h.id} style={{
-                      padding: '10px 0',
-                      borderBottom: i < history.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <span className={`chip chip--${aTone}`} style={{ fontSize: 10.5, flexShrink: 0 }}>
-                          {h.action || 'تحديث'}
-                        </span>
-                        <span className="num muted" style={{ fontSize: 10.5, marginInlineStart: 'auto' }}>
-                          {dayjs(h.created_at).isValid()
-                            ? dayjs(h.created_at).format('YYYY-MM-DD HH:mm')
-                            : h.created_at}
-                        </span>
-                      </div>
-                      {h.details && (
-                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                          {h.details}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
+          <HistoryCard history={history} />
         </div>
       </div>
 

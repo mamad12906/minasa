@@ -14,7 +14,10 @@ router.post('/', adminOnly, async (req, res) => {
   try {
     await pool.query('INSERT INTO platforms (name) VALUES ($1) ON CONFLICT DO NOTHING', [req.body.name])
     res.json({ success: true })
-  } catch (err: any) { res.json({ error: err.message }) }
+  } catch (err: any) {
+    console.error('[platforms.create]', err.message)
+    res.status(500).json({ error: 'تعذر إنشاء المنصة' })
+  }
 })
 
 router.delete('/:id', adminOnly, async (req, res) => {

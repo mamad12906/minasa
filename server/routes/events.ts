@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { authMiddleware, adminOnly, AuthRequest } from '../middleware/auth'
+import { authMiddleware, adminOnly, currentPwdVer, AuthRequest } from '../middleware/auth'
 import { bus, AppEvent } from '../events'
 
 const router = Router()
@@ -13,7 +13,7 @@ const router = Router()
  * connection drops. A comment heartbeat every 25 seconds keeps proxies
  * (Caddy, etc.) from timing out the connection.
  */
-router.get('/', authMiddleware, adminOnly, (req: AuthRequest, res) => {
+router.get('/', authMiddleware, adminOnly, async (req: AuthRequest, res) => {
   // SSE headers — disable buffering in the proxy + keep connection alive.
   res.set({
     'Content-Type': 'text/event-stream',
@@ -41,11 +41,23 @@ router.get('/', authMiddleware, adminOnly, (req: AuthRequest, res) => {
     try { res.write(': heartbeat\n\n') } catch { /* closed */ }
   }, 25_000)
 
+  // Long-lived SSE connections pre-date password rotations; snapshot the
+  // user's pwdVer at connect time and re-check every 60s — if it changes
+  // (password was rotated elsewhere) kick the stream so the client has to
+  // reconnect with a fresh token.
+  const connectVer = req.user?.id != null ? await currentPwdVer(req.user.id) : null
   const cleanup = () => {
     clearInterval(heartbeat)
+    clearInterval(pwdWatcher)
     bus.off('event', onEvent)
     try { res.end() } catch { /* already ended */ }
   }
+  const pwdWatcher = setInterval(async () => {
+    if (req.user?.id == null) return
+    const live = await currentPwdVer(req.user.id)
+    if (live == null || live !== connectVer) cleanup()
+  }, 60_000)
+
   req.on('close', cleanup)
   req.on('error', cleanup)
 })

@@ -24,7 +24,22 @@ const API_KEY = process.env.API_KEY || ''
 // Trust the reverse proxy (Caddy) so req.protocol reflects the original scheme (https).
 app.set('trust proxy', 1)
 
-app.use(cors({ origin: true, credentials: true }))
+// CORS allowlist from env (comma-separated). If ALLOWED_ORIGINS unset, fall back
+// to reflecting the request origin — same behaviour as before. Desktop/mobile
+// clients send no Origin header, so they're unaffected either way.
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean)
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true)
+    if (allowedOrigins.length === 0) return cb(null, true)
+    if (allowedOrigins.includes(origin)) return cb(null, true)
+    cb(new Error('CORS: origin not allowed'))
+  },
+  credentials: true,
+}))
 app.use(express.json({ limit: '50mb' }))
 
 // API Key protection - all /api/* routes require it.

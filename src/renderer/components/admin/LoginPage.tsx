@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Form, Input, Button, message, Progress, Modal } from 'antd'
-import {
-  CheckCircleOutlined, CloseCircleOutlined,
-  CloudDownloadOutlined, LockOutlined, GlobalOutlined,
-} from '@ant-design/icons'
+import { Form, Input, Button, message } from 'antd'
 import { useAuth, useTheme } from '../../App'
 import { setServerUrl, getServerUrl, setApiKey, getApiKey, loadPersistentConfig } from '../../api/http'
 import Icon from '../layout/Icon'
+import ServerSettingsPanel from './login/ServerSettingsPanel'
+import UpdateToast from './login/UpdateToast'
 
 const SECRET_CLICKS = 7
 
@@ -324,69 +322,18 @@ export default function LoginPage() {
               تذكرني على هذا الجهاز
             </label>
 
-            {/* Settings panel (hidden by default) */}
             {showSettings && (
-              <div style={{
-                padding: 16,
-                borderRadius: 12,
-                marginBottom: 16,
-                background: 'var(--bg-elevated)',
-                border: '1px dashed var(--border-strong)',
-                animation: 'fadeSlideDown 0.25s ease',
-              }}>
-                <div style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: 'var(--text-primary)',
-                  marginBottom: 10,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                }}>
-                  إعدادات الخادم
-                </div>
-                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                  <Input
-                    prefix={<GlobalOutlined style={{ color: 'var(--text-muted)' }} />}
-                    value={serverUrlInput}
-                    onChange={e => setServerUrlInput(e.target.value)}
-                    placeholder="https://example.com"
-                    style={{ borderRadius: 8, flex: 1, height: 36 }}
-                  />
-                  <Button
-                    onClick={checkServer}
-                    loading={checkingServer}
-                    style={{ borderRadius: 8, height: 36 }}
-                    size="small"
-                  >
-                    فحص
-                  </Button>
-                </div>
-                {serverStatus === 'connected' && (
-                  <div style={{ fontSize: 11, color: 'var(--success)', marginBottom: 8 }}>
-                    <CheckCircleOutlined /> متاح
-                  </div>
-                )}
-                {serverStatus === 'disconnected' && serverUrlInput && (
-                  <div style={{ fontSize: 11, color: 'var(--danger)', marginBottom: 8 }}>
-                    <CloseCircleOutlined /> غير متاح
-                  </div>
-                )}
-                <Input.Password
-                  prefix={<LockOutlined style={{ color: 'var(--text-muted)' }} />}
-                  value={apiKeyInput}
-                  onChange={e => setApiKeyInput(e.target.value)}
-                  placeholder="مفتاح API"
-                  style={{ borderRadius: 8, marginBottom: 10, height: 36 }}
-                />
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <Button type="primary" block onClick={saveAndHide} size="small" style={{ borderRadius: 8 }}>
-                    حفظ وإخفاء
-                  </Button>
-                  <Button block onClick={() => setShowSettings(false)} size="small" style={{ borderRadius: 8 }}>
-                    إلغاء
-                  </Button>
-                </div>
-              </div>
+              <ServerSettingsPanel
+                serverUrl={serverUrlInput}
+                onServerUrlChange={setServerUrlInput}
+                apiKey={apiKeyInput}
+                onApiKeyChange={setApiKeyInput}
+                status={serverStatus}
+                checking={checkingServer}
+                onCheck={checkServer}
+                onSave={saveAndHide}
+                onCancel={() => setShowSettings(false)}
+              />
             )}
 
             {/* Submit button */}
@@ -436,66 +383,13 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ============ Update toast ============ */}
-      {(updateInfo || updateReady) && (
-        <div style={{
-          position: 'fixed',
-          bottom: 24,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 100,
-          padding: '12px 20px',
-          borderRadius: 14,
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border-strong)',
-          boxShadow: 'var(--shadow-lg)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-          animation: 'slideUp 0.4s ease',
-          color: 'var(--text-primary)',
-          fontSize: 13,
-        }}>
-          {updateReady ? (
-            <>
-              <CheckCircleOutlined style={{ color: 'var(--success)', fontSize: 18 }} />
-              <span>التحديث جاهز</span>
-              <Button
-                size="small"
-                type="primary"
-                onClick={() => Modal.confirm({
-                  title: 'تثبيت التحديث',
-                  content: 'سيتم إعادة تشغيل البرنامج.',
-                  okText: 'ثبّت',
-                  cancelText: 'لاحقاً',
-                  onOk: () => updater?.install(),
-                })}
-                style={{ borderRadius: 8 }}
-              >
-                ثبّت الآن
-              </Button>
-            </>
-          ) : downloadProgress !== null ? (
-            <>
-              <span>جاري التحميل</span>
-              <Progress percent={downloadProgress} size="small" style={{ width: 140 }} strokeColor="var(--brand)" />
-            </>
-          ) : (
-            <>
-              <CloudDownloadOutlined style={{ color: 'var(--brand)', fontSize: 18 }} />
-              <span>نسخة {updateInfo?.version}</span>
-              <Button
-                size="small"
-                type="primary"
-                onClick={() => { setDownloadProgress(0); updater?.download() }}
-                style={{ borderRadius: 8 }}
-              >
-                تحميل
-              </Button>
-            </>
-          )}
-        </div>
-      )}
+      <UpdateToast
+        updateInfo={updateInfo}
+        updateReady={updateReady}
+        downloadProgress={downloadProgress}
+        onStartDownload={() => { setDownloadProgress(0); updater?.download() }}
+        onInstall={() => updater?.install()}
+      />
 
       <style>{`
         @keyframes fadeSlideDown {

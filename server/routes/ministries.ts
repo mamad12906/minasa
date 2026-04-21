@@ -20,7 +20,10 @@ router.post('/', adminOnly, validate(NameOnlySchema), async (req: AuthRequest, r
     await audit(req, 'create', 'ministry', null, `added ministry "${name}"`)
     emitEvent('ministry.created', req.user, null, name)
     res.json({ success: true })
-  } catch (err: any) { res.json({ error: err.message }) }
+  } catch (err: any) {
+    console.error('[ministries.create]', err.message)
+    res.status(500).json({ error: 'تعذر إضافة الوزارة' })
+  }
 })
 
 router.delete('/:id', adminOnly, async (req: AuthRequest, res) => {

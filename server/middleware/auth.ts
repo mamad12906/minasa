@@ -37,7 +37,7 @@ export function invalidatePwdVerCache(userId: number): void {
   pwdVerCache.delete(userId)
 }
 
-async function currentPwdVer(userId: number): Promise<number | null> {
+export async function currentPwdVer(userId: number): Promise<number | null> {
   const cached = pwdVerCache.get(userId)
   if (cached != null) return cached
   try {

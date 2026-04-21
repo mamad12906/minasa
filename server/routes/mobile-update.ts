@@ -75,15 +75,17 @@ router.get('/version', (_req: Request, res: Response) => {
 router.get('/download/:file', (req: Request, res: Response) => {
   try {
     const file = req.params.file
-    // Security: reject any path traversal
-    if (file.includes('..') || file.includes('/') || file.includes('\\')) {
+    // Whitelist allowed filename shape, then resolve and confirm the final
+    // path is still inside UPDATES_DIR — absolute paths and crafted segments
+    // won't escape the sandbox.
+    if (!/^[A-Za-z0-9._-]+\.apk$/.test(file)) {
       return res.status(400).json({ error: 'اسم ملف غير صالح' })
     }
-    if (!file.endsWith('.apk')) {
-      return res.status(400).json({ error: 'ملف APK فقط' })
+    const updatesRoot = path.resolve(UPDATES_DIR)
+    const apkPath = path.resolve(updatesRoot, file)
+    if (!apkPath.startsWith(updatesRoot + path.sep) && apkPath !== updatesRoot) {
+      return res.status(400).json({ error: 'اسم ملف غير صالح' })
     }
-
-    const apkPath = path.join(UPDATES_DIR, file)
     if (!fs.existsSync(apkPath)) {
       return res.status(404).json({ error: 'الملف غير موجود' })
     }

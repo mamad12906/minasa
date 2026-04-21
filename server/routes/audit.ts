@@ -23,7 +23,8 @@ router.get('/', async (req, res) => {
     const c = await pool.query('SELECT COUNT(*) FROM audit_log')
     res.json({ data: r.rows, total: parseInt(c.rows[0].count, 10) })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    console.error('[audit.list]', e.message)
+    res.status(500).json({ error: 'تعذر جلب سجل المراجعة' })
   }
 })
 

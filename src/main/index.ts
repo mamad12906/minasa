@@ -30,8 +30,15 @@ function createWindow(): void {
     mainWindow?.maximize()
   })
 
+  // Only forward http(s) to the OS browser. Anything else (javascript:,
+  // file:, data:, custom protocols) gets silently denied to block injection.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    try {
+      const parsed = new URL(url)
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        shell.openExternal(url)
+      }
+    } catch { /* malformed URL — drop */ }
     return { action: 'deny' }
   })
 

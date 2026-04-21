@@ -15,6 +15,30 @@ function clientIp(req: any): string {
   return (req.ip || req.socket?.remoteAddress || '').toString()
 }
 
+// Per-IP brute-force guard on /login. Sliding 60s window; a sweep drops stale
+// buckets so the map can't grow unbounded.
+const LOGIN_WINDOW_MS = 60_000
+const LOGIN_MAX = 5
+const loginBuckets = new Map<string, { count: number; reset: number }>()
+setInterval(() => {
+  const now = Date.now()
+  for (const [ip, entry] of loginBuckets) {
+    if (entry.reset < now) loginBuckets.delete(ip)
+  }
+}, LOGIN_WINDOW_MS * 5).unref()
+
+function loginLimit(ip: string): boolean {
+  const now = Date.now()
+  const bucket = loginBuckets.get(ip)
+  if (!bucket || now >= bucket.reset) {
+    loginBuckets.set(ip, { count: 1, reset: now + LOGIN_WINDOW_MS })
+    return true
+  }
+  if (bucket.count >= LOGIN_MAX) return false
+  bucket.count++
+  return true
+}
+
 async function logLogin(userId: number | null, username: string, action: string, details: string, ip: string) {
   try {
     await pool.query(
@@ -30,6 +54,9 @@ async function logLogin(userId: number | null, username: string, action: string,
 router.post('/login', async (req, res) => {
   const { username, password } = req.body
   const ip = clientIp(req)
+  if (!loginLimit(ip)) {
+    return res.status(429).json({ error: 'محاولات دخول كثيرة، حاول بعد دقيقة' })
+  }
   const result = await pool.query('SELECT * FROM users WHERE username = $1', [username])
   if (result.rows.length === 0) {
     await logLogin(null, String(username || ''), 'login_failed', 'unknown user', ip)
