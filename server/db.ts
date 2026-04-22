@@ -18,6 +18,7 @@ export async function initDB() {
       permissions TEXT NOT NULL DEFAULT '{}',
       platform_name TEXT DEFAULT '',
       password_version INTEGER NOT NULL DEFAULT 1,
+      parent_id INTEGER DEFAULT NULL,
       created_at TIMESTAMP DEFAULT NOW()
     );
 
@@ -26,6 +27,12 @@ export async function initDB() {
     -- were issued with and the middleware rejects stale values, so a
     -- password reset invalidates any biometric-cached tokens immediately.
     ALTER TABLE users ADD COLUMN IF NOT EXISTS password_version INTEGER NOT NULL DEFAULT 1;
+
+    -- Parent/child relationship for the subadmin tier: regular users + sub
+    -- users report up to the subadmin who created them; subadmins report up
+    -- to the main admin. NULL = top-level (main admin). Added 2026-04-22.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS parent_id INTEGER DEFAULT NULL;
+    CREATE INDEX IF NOT EXISTS idx_users_parent ON users(parent_id);
 
     CREATE TABLE IF NOT EXISTS customers (
       id SERIAL PRIMARY KEY,

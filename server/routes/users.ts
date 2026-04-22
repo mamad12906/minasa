@@ -31,12 +31,17 @@ router.get('/', async (_req, res) => {
 })
 
 router.post('/', validate(CreateUserSchema), async (req: AuthRequest, res) => {
-  const { username, password, display_name, role, permissions, platform_name } = req.body
+  const { username, password, display_name, role, permissions, platform_name, parent_id } = req.body
   try {
     const hashed = bcrypt.hashSync(password, 10)
+    // Assign parent: explicit parent_id from request wins (admin acting on
+    // behalf of a subadmin), else default to the creator. Main admin stays
+    // top-level (their own parent_id remains NULL from seed). Subadmins and
+    // regular users get a parent so the hierarchy query can walk upward.
+    const effectiveParent = parent_id ?? req.user!.id
     const r = await pool.query(
-      'INSERT INTO users (username, password, display_name, role, permissions, platform_name) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-      [username, hashed, display_name, role || 'user', permissions || '{}', platform_name || '']
+      'INSERT INTO users (username, password, display_name, role, permissions, platform_name, parent_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+      [username, hashed, display_name, role || 'user', permissions || '{}', platform_name || '', effectiveParent],
     )
     await audit(req, 'create', 'user', r.rows[0].id,
       `created user ${username} (${display_name}) role=${role || 'user'}`)

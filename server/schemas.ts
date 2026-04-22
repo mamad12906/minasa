@@ -12,9 +12,10 @@ export const CreateUserSchema = z.object({
   username: z.string().min(3).max(50),
   password: z.string().min(6).max(128),
   display_name: z.string().min(1).max(100),
-  role: z.enum(['admin', 'user']).optional(),
+  role: z.enum(['admin', 'subadmin', 'user']).optional(),
   permissions: z.string().max(2000).optional(),
   platform_name: z.string().max(200).optional(),
+  parent_id: z.number().int().nullable().optional(),
 })
 
 export const UpdateUserSchema = z.object({
