@@ -24,6 +24,7 @@ export const UpdateUserSchema = z.object({
   role: z.enum(['admin', 'subadmin', 'user']).optional(),
   permissions: z.string().max(2000).optional(),
   platform_name: z.string().max(200).optional(),
+  parent_id: z.number().int().nullable().optional(),
 })
 
 export const CreateCustomerSchema = z.object({

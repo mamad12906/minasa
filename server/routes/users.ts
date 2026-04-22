@@ -71,35 +71,32 @@ router.post('/', adminOnly, validate(CreateUserSchema), async (req: AuthRequest,
 })
 
 router.put('/:id', adminOnly, validate(UpdateUserSchema), async (req: AuthRequest, res) => {
-  const { display_name, password, role, permissions, platform_name } = req.body
+  const { display_name, password, role, permissions, platform_name, parent_id } = req.body
   const id = parseInt(req.params.id, 10)
-  // Role only updates when explicitly supplied; otherwise stored role
-  // stays untouched so callers that omit it can't accidentally demote.
+  // Build the dynamic UPDATE. Optional fields (role, parent_id) only get
+  // written when the caller explicitly supplies them.
+  const sets: string[] = ['display_name=$1', 'permissions=$2', 'platform_name=$3']
+  const params: any[] = [display_name, permissions, platform_name || '']
+  let i = 4
   if (password) {
-    // Bump password_version so every existing token for this user (including
-    // the one cached by biometric unlock) is rejected on the next request.
     const hashed = bcrypt.hashSync(password, 10)
-    if (role) {
-      await pool.query(
-        'UPDATE users SET display_name=$1, password=$2, permissions=$3, platform_name=$4, role=$5, password_version=password_version+1 WHERE id=$6',
-        [display_name, hashed, permissions, platform_name||'', role, id])
-    } else {
-      await pool.query(
-        'UPDATE users SET display_name=$1, password=$2, permissions=$3, platform_name=$4, password_version=password_version+1 WHERE id=$5',
-        [display_name, hashed, permissions, platform_name||'', id])
-    }
-    invalidatePwdVerCache(id)
-  } else {
-    if (role) {
-      await pool.query(
-        'UPDATE users SET display_name=$1, permissions=$2, platform_name=$3, role=$4 WHERE id=$5',
-        [display_name, permissions, platform_name||'', role, id])
-    } else {
-      await pool.query(
-        'UPDATE users SET display_name=$1, permissions=$2, platform_name=$3 WHERE id=$4',
-        [display_name, permissions, platform_name||'', id])
-    }
+    sets.push(`password=$${i++}`)
+    params.push(hashed)
+    sets.push('password_version = password_version + 1')
   }
+  if (role) {
+    sets.push(`role=$${i++}`)
+    params.push(role)
+  }
+  if (parent_id !== undefined) {
+    // Accept null (top-level) or any integer. Admin is trusted not to
+    // create cycles; phase 3 will add server-side cycle check.
+    sets.push(`parent_id=$${i++}`)
+    params.push(parent_id)
+  }
+  params.push(id)
+  await pool.query(`UPDATE users SET ${sets.join(', ')} WHERE id=$${i}`, params)
+  if (password) invalidatePwdVerCache(id)
   // Permissions cache keyed by user id — drop it so requirePermission()
   // on the next request fetches fresh from the DB.
   invalidatePermsCache(id)
