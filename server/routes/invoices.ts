@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { pool } from '../db'
 import { AuthRequest, authMiddleware } from '../middleware/auth'
+import { requirePermission } from '../middleware/permissions'
 import { audit } from '../audit'
 import { validate, CreateInvoiceSchema, UpdateInvoiceSchema } from '../schemas'
 import { emitEvent } from '../events'
@@ -72,7 +73,7 @@ router.get('/:id', async (req: AuthRequest, res) => {
 })
 
 // Create invoice
-router.post('/', validate(CreateInvoiceSchema), async (req: AuthRequest, res) => {
+router.post('/', requirePermission('add_invoice'), validate(CreateInvoiceSchema), async (req: AuthRequest, res) => {
   const input = req.body
 
   // Verify customer exists (foreign key would fail otherwise with a cryptic error).
@@ -102,7 +103,7 @@ router.post('/', validate(CreateInvoiceSchema), async (req: AuthRequest, res) =>
 })
 
 // Update invoice
-router.put('/:id', validate(UpdateInvoiceSchema), async (req: AuthRequest, res) => {
+router.put('/:id', requirePermission('edit_invoice'), validate(UpdateInvoiceSchema), async (req: AuthRequest, res) => {
   const input = req.body
   const id = parseInt(req.params.id, 10)
 
@@ -148,7 +149,7 @@ router.put('/:id', validate(UpdateInvoiceSchema), async (req: AuthRequest, res) 
 })
 
 // Delete invoice
-router.delete('/:id', async (req: AuthRequest, res) => {
+router.delete('/:id', requirePermission('delete_invoice'), async (req: AuthRequest, res) => {
   const id = parseInt(req.params.id, 10)
   const existing = await pool.query('SELECT customer_name FROM invoices WHERE id = $1', [id])
   await pool.query('DELETE FROM invoices WHERE id = $1', [id])

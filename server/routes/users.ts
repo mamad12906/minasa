@@ -2,7 +2,7 @@ import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { pool } from '../db'
-import { AuthRequest, authMiddleware, adminOnly, invalidatePwdVerCache } from '../middleware/auth'
+import { AuthRequest, authMiddleware, adminOnly, invalidatePwdVerCache, invalidatePermsCache } from '../middleware/auth'
 import { audit } from '../audit'
 import { validate, CreateUserSchema, UpdateUserSchema } from '../schemas'
 import { emitEvent } from '../events'
@@ -62,6 +62,9 @@ router.put('/:id', validate(UpdateUserSchema), async (req: AuthRequest, res) => 
     await pool.query('UPDATE users SET display_name=$1, permissions=$2, platform_name=$3 WHERE id=$4',
       [display_name, permissions, platform_name||'', id])
   }
+  // Permissions cache keyed by user id — drop it so requirePermission()
+  // on the next request fetches fresh from the DB.
+  invalidatePermsCache(id)
   const r = await pool.query('SELECT * FROM users WHERE id = $1', [id])
   await audit(req, 'update', 'user', id,
     password ? 'updated user (password changed)' : 'updated user')
@@ -73,6 +76,8 @@ router.put('/:id', validate(UpdateUserSchema), async (req: AuthRequest, res) => 
 router.delete('/:id', async (req: AuthRequest, res) => {
   const victim = await pool.query('SELECT username FROM users WHERE id = $1', [req.params.id])
   await pool.query('DELETE FROM users WHERE id = $1', [req.params.id])
+  invalidatePermsCache(parseInt(req.params.id, 10))
+  invalidatePwdVerCache(parseInt(req.params.id, 10))
   await audit(req, 'delete', 'user', parseInt(req.params.id, 10),
     `deleted user ${victim.rows[0]?.username || ''}`)
   emitEvent('user.deleted', req.user, parseInt(req.params.id, 10),

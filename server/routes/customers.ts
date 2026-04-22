@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { pool } from '../db'
 import { AuthRequest, authMiddleware } from '../middleware/auth'
+import { requirePermission } from '../middleware/permissions'
 import { calculateReminderDate, calculateExpiryDate } from '../utils/reminder-utils'
 import { audit } from '../audit'
 import { validate, CreateCustomerSchema, UpdateCustomerSchema } from '../schemas'
@@ -83,7 +84,7 @@ router.get('/:id', async (req: AuthRequest, res) => {
 })
 
 // Create customer
-router.post('/', validate(CreateCustomerSchema), async (req: AuthRequest, res) => {
+router.post('/', requirePermission('add_customer'), validate(CreateCustomerSchema), async (req: AuthRequest, res) => {
   const input = req.body
   const userId = req.user!.role !== 'admin' ? req.user!.id : (input.user_id || req.user!.id)
 
@@ -118,7 +119,7 @@ router.post('/', validate(CreateCustomerSchema), async (req: AuthRequest, res) =
 })
 
 // Update customer
-router.put('/:id', validate(UpdateCustomerSchema), async (req: AuthRequest, res) => {
+router.put('/:id', requirePermission('edit_customer'), validate(UpdateCustomerSchema), async (req: AuthRequest, res) => {
   const input = req.body
   const existing = await pool.query('SELECT user_id FROM customers WHERE id = $1', [req.params.id])
   const originalUserId = existing.rows[0]?.user_id || req.user!.id
@@ -173,7 +174,7 @@ router.put('/:id', validate(UpdateCustomerSchema), async (req: AuthRequest, res)
 })
 
 // Delete customer
-router.delete('/:id', async (req: AuthRequest, res) => {
+router.delete('/:id', requirePermission('delete_customer'), async (req: AuthRequest, res) => {
   const existing = await pool.query('SELECT full_name FROM customers WHERE id = $1', [req.params.id])
   await pool.query('DELETE FROM customers WHERE id = $1', [req.params.id])
   await audit(req, 'delete', 'customer', parseInt(req.params.id, 10),

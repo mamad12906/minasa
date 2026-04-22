@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { pool } from '../db'
 import { AuthRequest, authMiddleware } from '../middleware/auth'
+import { requirePermission } from '../middleware/permissions'
 import { audit } from '../audit'
 import { emitEvent } from '../events'
 
@@ -61,7 +62,7 @@ router.get('/all', async (req: AuthRequest, res) => {
 })
 
 // Mark done
-router.post('/:id/done', async (req: AuthRequest, res) => {
+router.post('/:id/done', requirePermission('manage_reminders'), async (req: AuthRequest, res) => {
   const { handled_by, handle_method } = req.body
   const id = parseInt(req.params.id, 10)
   const name = await reminderCustomerName(id)
@@ -72,7 +73,7 @@ router.post('/:id/done', async (req: AuthRequest, res) => {
 })
 
 // Postpone
-router.post('/:id/postpone', async (req: AuthRequest, res) => {
+router.post('/:id/postpone', requirePermission('manage_reminders'), async (req: AuthRequest, res) => {
   const { new_date, reason } = req.body
   const id = parseInt(req.params.id, 10)
   const r = await pool.query('SELECT * FROM reminders WHERE id = $1', [id])
@@ -86,7 +87,7 @@ router.post('/:id/postpone', async (req: AuthRequest, res) => {
 })
 
 // Re-remind
-router.post('/:id/reremind', async (req: AuthRequest, res) => {
+router.post('/:id/reremind', requirePermission('manage_reminders'), async (req: AuthRequest, res) => {
   const { new_date, reason } = req.body
   const r = await pool.query('SELECT * FROM reminders WHERE id = $1', [req.params.id])
   const orig = r.rows[0]
@@ -102,7 +103,7 @@ router.post('/:id/reremind', async (req: AuthRequest, res) => {
 })
 
 // Update reminder (date + text)
-router.put('/:id', async (req: AuthRequest, res) => {
+router.put('/:id', requirePermission('manage_reminders'), async (req: AuthRequest, res) => {
   const { reminder_date, reminder_text } = req.body
   const id = parseInt(req.params.id, 10)
   const sets: string[] = []
@@ -130,7 +131,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
 })
 
 // Delete
-router.delete('/:id', async (req: AuthRequest, res) => {
+router.delete('/:id', requirePermission('manage_reminders'), async (req: AuthRequest, res) => {
   const id = parseInt(req.params.id, 10)
   const name = await reminderCustomerName(id)
   await pool.query('DELETE FROM reminders WHERE id = $1', [id])

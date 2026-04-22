@@ -10,7 +10,14 @@ if (!JWT_SECRET) {
 }
 
 export interface AuthRequest extends Request {
-  user?: { id: number; username: string; role: string; display_name: string; platform_name: string }
+  user?: {
+    id: number
+    username: string
+    role: string
+    display_name: string
+    platform_name: string
+    permissions?: Record<string, boolean>
+  }
 }
 
 export function generateToken(user: any): string {
@@ -52,6 +59,38 @@ export async function currentPwdVer(userId: number): Promise<number | null> {
   }
 }
 
+// Per-user permissions cache — same pattern as pwdVerCache. Admin routes
+// must call invalidatePermsCache(userId) whenever they change a user's
+// permissions so the next request picks up the new set.
+const permsCache = new Map<number, Record<string, boolean>>()
+
+export function invalidatePermsCache(userId: number): void {
+  permsCache.delete(userId)
+}
+
+export async function currentPermissions(userId: number): Promise<Record<string, boolean>> {
+  const cached = permsCache.get(userId)
+  if (cached) return cached
+  try {
+    const r = await pool.query<{ permissions: string }>(
+      'SELECT permissions FROM users WHERE id = $1', [userId])
+    if (r.rows.length === 0) return {}
+    let perms: Record<string, boolean> = {}
+    try {
+      const parsed = JSON.parse(r.rows[0].permissions || '{}')
+      if (parsed && typeof parsed === 'object') {
+        for (const [k, v] of Object.entries(parsed)) {
+          perms[k] = v === true
+        }
+      }
+    } catch { /* leave perms empty on malformed JSON */ }
+    permsCache.set(userId, perms)
+    return perms
+  } catch {
+    return {}
+  }
+}
+
 export async function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
   const token = req.headers.authorization?.replace('Bearer ', '')
   if (!token) return res.status(401).json({ error: 'غير مصرح' })
@@ -74,6 +113,12 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
   }
   if (tokenVer !== liveVer) {
     return res.status(401).json({ error: 'انتهت الجلسة، سجل دخول مرة أخرى' })
+  }
+
+  // Attach permissions for non-admins so requirePermission() can check
+  // without an extra DB query (cached). Admins bypass all perm checks.
+  if (decoded.role !== 'admin') {
+    decoded.permissions = await currentPermissions(decoded.id)
   }
 
   req.user = decoded
