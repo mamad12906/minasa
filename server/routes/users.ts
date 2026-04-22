@@ -48,15 +48,26 @@ router.get('/', async (req: AuthRequest, res) => {
   return res.status(403).json({ error: 'صلاحية الأدمن فقط' })
 })
 
-router.post('/', adminOnly, validate(CreateUserSchema), async (req: AuthRequest, res) => {
+router.post('/', validate(CreateUserSchema), async (req: AuthRequest, res) => {
   const { username, password, display_name, role, permissions, platform_name, parent_id } = req.body
+  // Authorization: admin does anything; subadmin can create regular users
+  // under themselves only IF they hold the create_users permission key.
+  const callerRole = req.user!.role
+  if (callerRole !== 'admin') {
+    if (callerRole !== 'subadmin' || req.user!.permissions?.create_users !== true) {
+      return res.status(403).json({ error: 'ليس لديك صلاحية إنشاء مستخدمين' })
+    }
+    if (role && role !== 'user') {
+      return res.status(403).json({ error: 'يمكنك إنشاء مستخدمين عاديين فقط' })
+    }
+  }
   try {
     const hashed = bcrypt.hashSync(password, 10)
-    // Assign parent: explicit parent_id from request wins (admin acting on
-    // behalf of a subadmin), else default to the creator. Main admin stays
-    // top-level (their own parent_id remains NULL from seed). Subadmins and
-    // regular users get a parent so the hierarchy query can walk upward.
-    const effectiveParent = parent_id ?? req.user!.id
+    // Assign parent: admin may pass parent_id explicitly; subadmin is always
+    // forced to self so they can't plant users under someone else.
+    const effectiveParent = callerRole === 'admin'
+      ? (parent_id ?? req.user!.id)
+      : req.user!.id
     const r = await pool.query(
       'INSERT INTO users (username, password, display_name, role, permissions, platform_name, parent_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
       [username, hashed, display_name, role || 'user', permissions || '{}', platform_name || '', effectiveParent],
@@ -70,9 +81,25 @@ router.post('/', adminOnly, validate(CreateUserSchema), async (req: AuthRequest,
   }
 })
 
-router.put('/:id', adminOnly, validate(UpdateUserSchema), async (req: AuthRequest, res) => {
+router.put('/:id', validate(UpdateUserSchema), async (req: AuthRequest, res) => {
   const { display_name, password, role, permissions, platform_name, parent_id } = req.body
   const id = parseInt(req.params.id, 10)
+  // Subadmin gate: can only edit their own sub-users, and only if the
+  // edit_users permission is granted. Role/parent changes are blocked for
+  // them to prevent self-promotion or reparenting outside the hierarchy.
+  const callerRole = req.user!.role
+  if (callerRole !== 'admin') {
+    if (callerRole !== 'subadmin' || req.user!.permissions?.edit_users !== true) {
+      return res.status(403).json({ error: 'ليس لديك صلاحية تعديل مستخدمين' })
+    }
+    const target = await pool.query('SELECT parent_id FROM users WHERE id = $1', [id])
+    if (target.rows[0]?.parent_id !== req.user!.id) {
+      return res.status(403).json({ error: 'لا يمكنك تعديل هذا المستخدم' })
+    }
+    if (role || parent_id !== undefined) {
+      return res.status(403).json({ error: 'لا يمكنك تغيير الدور أو الارتباط' })
+    }
+  }
   // Build the dynamic UPDATE. Optional fields (role, parent_id) only get
   // written when the caller explicitly supplies them.
   const sets: string[] = ['display_name=$1', 'permissions=$2', 'platform_name=$3']
@@ -108,7 +135,18 @@ router.put('/:id', adminOnly, validate(UpdateUserSchema), async (req: AuthReques
   res.json(r.rows[0])
 })
 
-router.delete('/:id', adminOnly, async (req: AuthRequest, res) => {
+router.delete('/:id', async (req: AuthRequest, res) => {
+  const id = parseInt(req.params.id, 10)
+  const callerRole = req.user!.role
+  if (callerRole !== 'admin') {
+    if (callerRole !== 'subadmin' || req.user!.permissions?.delete_users !== true) {
+      return res.status(403).json({ error: 'ليس لديك صلاحية حذف مستخدمين' })
+    }
+    const target = await pool.query('SELECT parent_id FROM users WHERE id = $1', [id])
+    if (target.rows[0]?.parent_id !== req.user!.id) {
+      return res.status(403).json({ error: 'لا يمكنك حذف هذا المستخدم' })
+    }
+  }
   const victim = await pool.query('SELECT username FROM users WHERE id = $1', [req.params.id])
   await pool.query('DELETE FROM users WHERE id = $1', [req.params.id])
   invalidatePermsCache(parseInt(req.params.id, 10))
