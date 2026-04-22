@@ -53,19 +53,34 @@ router.post('/', validate(CreateUserSchema), async (req: AuthRequest, res) => {
 })
 
 router.put('/:id', validate(UpdateUserSchema), async (req: AuthRequest, res) => {
-  const { display_name, password, permissions, platform_name } = req.body
+  const { display_name, password, role, permissions, platform_name } = req.body
   const id = parseInt(req.params.id, 10)
+  // Role only updates when explicitly supplied; otherwise stored role
+  // stays untouched so callers that omit it can't accidentally demote.
   if (password) {
     // Bump password_version so every existing token for this user (including
     // the one cached by biometric unlock) is rejected on the next request.
     const hashed = bcrypt.hashSync(password, 10)
-    await pool.query(
-      'UPDATE users SET display_name=$1, password=$2, permissions=$3, platform_name=$4, password_version=password_version+1 WHERE id=$5',
-      [display_name, hashed, permissions, platform_name||'', id])
+    if (role) {
+      await pool.query(
+        'UPDATE users SET display_name=$1, password=$2, permissions=$3, platform_name=$4, role=$5, password_version=password_version+1 WHERE id=$6',
+        [display_name, hashed, permissions, platform_name||'', role, id])
+    } else {
+      await pool.query(
+        'UPDATE users SET display_name=$1, password=$2, permissions=$3, platform_name=$4, password_version=password_version+1 WHERE id=$5',
+        [display_name, hashed, permissions, platform_name||'', id])
+    }
     invalidatePwdVerCache(id)
   } else {
-    await pool.query('UPDATE users SET display_name=$1, permissions=$2, platform_name=$3 WHERE id=$4',
-      [display_name, permissions, platform_name||'', id])
+    if (role) {
+      await pool.query(
+        'UPDATE users SET display_name=$1, permissions=$2, platform_name=$3, role=$4 WHERE id=$5',
+        [display_name, permissions, platform_name||'', role, id])
+    } else {
+      await pool.query(
+        'UPDATE users SET display_name=$1, permissions=$2, platform_name=$3 WHERE id=$4',
+        [display_name, permissions, platform_name||'', id])
+    }
   }
   // Permissions cache keyed by user id — drop it so requirePermission()
   // on the next request fetches fresh from the DB.

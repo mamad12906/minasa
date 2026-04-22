@@ -21,6 +21,7 @@ export const CreateUserSchema = z.object({
 export const UpdateUserSchema = z.object({
   display_name: z.string().min(1).max(100),
   password: z.string().min(6).max(128).optional().nullable(),
+  role: z.enum(['admin', 'subadmin', 'user']).optional(),
   permissions: z.string().max(2000).optional(),
   platform_name: z.string().max(200).optional(),
 })
