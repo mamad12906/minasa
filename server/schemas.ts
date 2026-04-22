@@ -67,6 +67,26 @@ export const CreateInvoiceSchema = z.object({
 
 export const UpdateInvoiceSchema = CreateInvoiceSchema.partial()
 
+// Reminder action schemas — short-form bodies, but still capped so a rogue
+// client can't cram multi-MB strings into handled_by/reason fields and spam
+// the audit log.
+export const ReminderDoneSchema = z.object({
+  handled_by: z.string().max(100).optional(),
+  handle_method: z.string().max(50).optional(),
+})
+
+export const ReminderPostponeSchema = z.object({
+  new_date: z.string().min(1).max(20),
+  reason: z.string().max(500).optional(),
+})
+
+export const ReminderRemindSchema = ReminderPostponeSchema
+
+export const UpdateReminderSchema = z.object({
+  reminder_date: z.string().max(20).optional(),
+  reminder_text: z.string().max(500).optional(),
+})
+
 /**
  * Express middleware factory that validates `req.body` against a zod schema.
  * On failure, responds with 400 + a short Arabic message and the first error

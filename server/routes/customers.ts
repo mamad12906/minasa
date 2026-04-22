@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import bcrypt from 'bcryptjs'
 import { pool } from '../db'
 import { AuthRequest, authMiddleware } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissions'
@@ -6,6 +7,31 @@ import { calculateReminderDate, calculateExpiryDate } from '../utils/reminder-ut
 import { audit } from '../audit'
 import { validate, CreateCustomerSchema, UpdateCustomerSchema } from '../schemas'
 import { emitEvent } from '../events'
+
+/**
+ * Guard for destructive bulk routes — require the admin to re-enter their
+ * password in the request body as `confirm_password`. Returns true if it
+ * matches, else writes a 403/400 and returns false. Caller should `return`.
+ */
+async function verifyAdminPassword(req: AuthRequest, res: any): Promise<boolean> {
+  const confirm = (req.body?.confirm_password as string | undefined)?.trim()
+  if (!confirm) {
+    res.status(400).json({ error: 'يجب إدخال كلمة مرور الأدمن للتأكيد' })
+    return false
+  }
+  const r = await pool.query('SELECT password FROM users WHERE id = $1 LIMIT 1', [req.user!.id])
+  const stored = r.rows[0]?.password as string | undefined
+  if (!stored) {
+    res.status(403).json({ error: 'تعذّر التحقق من كلمة المرور' })
+    return false
+  }
+  const ok = stored.startsWith('$2') && bcrypt.compareSync(confirm, stored)
+  if (!ok) {
+    res.status(403).json({ error: 'كلمة المرور خاطئة — الحذف ملغى' })
+    return false
+  }
+  return true
+}
 
 const router = Router()
 router.use(authMiddleware)
@@ -57,8 +83,11 @@ router.get('/meta/categories', async (_req, res) => {
 })
 
 // DELETE ALL customers (admin only) - MUST be before /:id
+// Requires `confirm_password` in the body matching the admin's current
+// password. Without it, the request fails without touching any rows.
 router.delete('/all/delete', async (req: AuthRequest, res) => {
   if (req.user!.role !== 'admin') return res.status(403).json({ error: 'admin only' })
+  if (!await verifyAdminPassword(req, res)) return
   await pool.query('DELETE FROM reminders')
   const result = await pool.query('DELETE FROM customers')
   await audit(req, 'delete_all', 'customer', null, `deleted ${result.rowCount} customers`)
@@ -66,12 +95,17 @@ router.delete('/all/delete', async (req: AuthRequest, res) => {
 })
 
 // DELETE all customers of a specific user (admin only) - MUST be before /:id
+// Same password re-entry guard as the nuke-all route above.
 router.delete('/user/:userId/delete', async (req: AuthRequest, res) => {
   if (req.user!.role !== 'admin') return res.status(403).json({ error: 'admin only' })
-  const userId = req.params.userId
+  if (!await verifyAdminPassword(req, res)) return
+  const userId = parseInt(req.params.userId, 10)
+  if (!Number.isFinite(userId) || userId <= 0) {
+    return res.status(400).json({ error: 'user_id غير صالح' })
+  }
   await pool.query('DELETE FROM reminders WHERE customer_id IN (SELECT id FROM customers WHERE user_id = $1)', [userId])
   const result = await pool.query('DELETE FROM customers WHERE user_id = $1', [userId])
-  await audit(req, 'delete_user_customers', 'user', parseInt(userId, 10),
+  await audit(req, 'delete_user_customers', 'user', userId,
     `deleted ${result.rowCount} customers of user #${userId}`)
   res.json({ success: true, deleted: result.rowCount })
 })

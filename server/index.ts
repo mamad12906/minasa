@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import helmet from 'helmet'
 import dotenv from 'dotenv'
 import { initDB } from './db'
 import authRoutes from './routes/auth'
@@ -24,6 +25,10 @@ const API_KEY = process.env.API_KEY || ''
 // Trust the reverse proxy (Caddy) so req.protocol reflects the original scheme (https).
 app.set('trust proxy', 1)
 
+// Security headers — contentSecurityPolicy off because Caddy strips it anyway
+// for the JSON API and there's no HTML we render server-side.
+app.use(helmet({ contentSecurityPolicy: false }))
+
 // CORS allowlist from env (comma-separated). If ALLOWED_ORIGINS unset, fall back
 // to reflecting the request origin — same behaviour as before. Desktop/mobile
 // clients send no Origin header, so they're unaffected either way.
@@ -40,7 +45,10 @@ app.use(cors({
   },
   credentials: true,
 }))
-app.use(express.json({ limit: '50mb' }))
+// 1 MB is plenty for any legitimate API payload. The old 50 MB cap left the
+// server exposed to trivial memory-exhaustion — any single unauthenticated
+// request pre-auth could have filled a request buffer.
+app.use(express.json({ limit: '1mb' }))
 
 // API Key protection - all /api/* routes require it.
 // Supports multiple valid keys (comma-separated in env) for rotation without downtime.
@@ -75,6 +83,39 @@ app.use('/api', (req, res, next) => {
     limit.count++
   } else {
     rateLimits.set(ip, { count: 1, reset: now + RATE_WINDOW_MS })
+  }
+  next()
+})
+
+// Stricter per-IP bucket for destructive writes — DELETE + admin reset-password
+// + bulk endpoints. Keeps an attacker with a valid API key + token from
+// grinding thousands of mutations in a burst even if the generic limiter
+// above hasn't tripped yet.
+const destructiveLimits = new Map<string, { count: number; reset: number }>()
+const DESTRUCTIVE_WINDOW_MS = 60_000
+const DESTRUCTIVE_MAX = 20
+setInterval(() => {
+  const now = Date.now()
+  for (const [ip, entry] of destructiveLimits) {
+    if (entry.reset < now) destructiveLimits.delete(ip)
+  }
+}, DESTRUCTIVE_WINDOW_MS * 5).unref()
+
+app.use('/api', (req, res, next) => {
+  const destructive = req.method === 'DELETE'
+    || (req.method === 'POST' && /\/reset-password/.test(req.path))
+    || (req.method === 'POST' && /\/transfer/.test(req.path))
+  if (!destructive) return next()
+  const ip = req.ip || req.socket.remoteAddress || 'unknown'
+  const now = Date.now()
+  const limit = destructiveLimits.get(ip)
+  if (limit && now < limit.reset) {
+    if (limit.count >= DESTRUCTIVE_MAX) {
+      return res.status(429).json({ error: 'طلبات حذف كثيرة، حاول بعد دقيقة' })
+    }
+    limit.count++
+  } else {
+    destructiveLimits.set(ip, { count: 1, reset: now + DESTRUCTIVE_WINDOW_MS })
   }
   next()
 })
