@@ -2,7 +2,7 @@ import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { pool } from '../db'
-import { generateToken } from '../middleware/auth'
+import { generateToken, authMiddleware, AuthRequest } from '../middleware/auth'
 import { emitEvent } from '../events'
 
 const router = Router()
@@ -93,6 +93,19 @@ router.post('/login', async (req, res) => {
     user.id, user.display_name || user.username, ip)
   const token = generateToken(user)
   res.json({ token, user: { id: user.id, username: user.username, display_name: user.display_name, role: user.role, permissions: user.permissions, platform_name: user.platform_name } })
+})
+
+// Return the authenticated user's current profile — specifically so mobile
+// clients can refresh stored permissions after an admin grants them new
+// access. Biometric unlock otherwise hands back the profile snapshotted at
+// enrollment time, which goes stale the moment admin edits perms.
+router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
+  const r = await pool.query(
+    'SELECT id, username, display_name, role, permissions, platform_name FROM users WHERE id = $1',
+    [req.user!.id],
+  )
+  if (r.rows.length === 0) return res.status(404).json({ error: 'الحساب غير موجود' })
+  res.json(r.rows[0])
 })
 
 export default router
