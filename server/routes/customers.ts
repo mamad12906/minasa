@@ -44,8 +44,26 @@ router.get('/', async (req: AuthRequest, res) => {
   let where = 'WHERE 1=1'
   let idx = 1
 
-  const filterUserId = req.user!.role !== 'admin' ? req.user!.id : (userId ? Number(userId) : null)
-  if (filterUserId) { where += ` AND c.user_id = $${idx++}`; params.push(filterUserId) }
+  // Scope: main admin sees everything (optionally narrowed by userId filter);
+  // subadmin sees their own + their sub-users' customers; regular user sees
+  // only their own.
+  const role = req.user!.role
+  if (role === 'admin') {
+    if (userId) { where += ` AND c.user_id = $${idx++}`; params.push(Number(userId)) }
+  } else if (role === 'subadmin') {
+    where += ` AND (c.user_id = $${idx} OR c.user_id IN (SELECT id FROM users WHERE parent_id = $${idx}))`
+    params.push(req.user!.id); idx++
+    if (userId) {
+      // Subadmin explicitly filtering to one of their sub-users — server
+      // still enforces the parent relationship above, so no leakage.
+      where += ` AND c.user_id = $${idx++}`
+      params.push(Number(userId))
+    }
+  } else {
+    where += ` AND c.user_id = $${idx++}`
+    params.push(req.user!.id)
+  }
+
   if (search) {
     where += ` AND (c.full_name ILIKE $${idx} OR c.phone_number ILIKE $${idx} OR c.card_number ILIKE $${idx} OR c.mother_name ILIKE $${idx})`
     params.push(`%${search}%`); idx++

@@ -23,8 +23,13 @@ router.get('/', async (req: AuthRequest, res) => {
   let where = 'WHERE 1=1'
   let idx = 1
 
-  // Scope non-admin users to their own customers' invoices.
-  if (req.user!.role !== 'admin') {
+  // Scope: admin sees all; subadmin sees their own + sub-users' customers'
+  // invoices; regular user sees only their own customers' invoices.
+  const role = req.user!.role
+  if (role === 'subadmin') {
+    where += ` AND (c.user_id = $${idx} OR c.user_id IN (SELECT id FROM users WHERE parent_id = $${idx}))`
+    params.push(req.user!.id); idx++
+  } else if (role !== 'admin') {
     where += ` AND c.user_id = $${idx++}`
     params.push(req.user!.id)
   }

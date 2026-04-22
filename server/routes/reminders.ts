@@ -32,7 +32,13 @@ router.get('/active', async (req: AuthRequest, res) => {
   const today = new Date().toISOString().split('T')[0]
   let where = 'WHERE r.is_done = 0 AND r.is_postponed = 0 AND r.reminder_date <= $1'
   const params: any[] = [today]
-  if (req.user!.role !== 'admin') {
+  // Scope rule mirrors customers.ts: admin = all, subadmin = self + children,
+  // user = self.
+  const role = req.user!.role
+  if (role === 'subadmin') {
+    where += ' AND (c.user_id = $2 OR c.user_id IN (SELECT id FROM users WHERE parent_id = $2))'
+    params.push(req.user!.id)
+  } else if (role !== 'admin') {
     where += ' AND c.user_id = $2'
     params.push(req.user!.id)
   }
@@ -52,7 +58,11 @@ router.get('/active', async (req: AuthRequest, res) => {
 router.get('/all', async (req: AuthRequest, res) => {
   let where = '1=1'
   const params: any[] = []
-  if (req.user!.role !== 'admin') {
+  const role = req.user!.role
+  if (role === 'subadmin') {
+    where = '(c.user_id = $1 OR c.user_id IN (SELECT id FROM users WHERE parent_id = $1))'
+    params.push(req.user!.id)
+  } else if (role !== 'admin') {
     where = 'c.user_id = $1'
     params.push(req.user!.id)
   }

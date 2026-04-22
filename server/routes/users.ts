@@ -10,27 +10,45 @@ import { snapshot as presenceSnapshot } from '../presence'
 
 const router = Router()
 router.use(authMiddleware)
-router.use(adminOnly)
+// NOTE: adminOnly is intentionally per-route rather than router-wide so
+// subadmins can list their own sub-users. All write routes below still
+// gate with their own check (admin OR subadmin-with-permission).
 
 /**
  * GET /api/users/online — map of userId → last-seen ms since epoch.
- * The desktop admin panel uses this to render the "online now" dot.
+ * Admin-only presence map.
  */
-router.get('/online', async (_req, res) => {
+router.get('/online', adminOnly, async (_req, res) => {
   res.json(presenceSnapshot())
 })
 
-router.get('/', async (_req, res) => {
-  const r = await pool.query(`
-    SELECT u.*, COALESCE(c.count, 0)::int as customer_count
-    FROM users u
-    LEFT JOIN (SELECT user_id, COUNT(*) as count FROM customers GROUP BY user_id) c ON c.user_id = u.id
-    ORDER BY u.created_at ASC
-  `)
-  res.json(r.rows)
+router.get('/', async (req: AuthRequest, res) => {
+  const role = req.user!.role
+  if (role === 'admin') {
+    const r = await pool.query(`
+      SELECT u.*, COALESCE(c.count, 0)::int as customer_count
+      FROM users u
+      LEFT JOIN (SELECT user_id, COUNT(*) as count FROM customers GROUP BY user_id) c ON c.user_id = u.id
+      ORDER BY u.created_at ASC
+    `)
+    return res.json(r.rows)
+  }
+  if (role === 'subadmin') {
+    // Subadmin sees themselves + every user they own (parent_id = self).
+    const r = await pool.query(
+      `SELECT u.*, COALESCE(c.count, 0)::int as customer_count
+       FROM users u
+       LEFT JOIN (SELECT user_id, COUNT(*) as count FROM customers GROUP BY user_id) c ON c.user_id = u.id
+       WHERE u.id = $1 OR u.parent_id = $1
+       ORDER BY u.created_at ASC`,
+      [req.user!.id],
+    )
+    return res.json(r.rows)
+  }
+  return res.status(403).json({ error: 'صلاحية الأدمن فقط' })
 })
 
-router.post('/', validate(CreateUserSchema), async (req: AuthRequest, res) => {
+router.post('/', adminOnly, validate(CreateUserSchema), async (req: AuthRequest, res) => {
   const { username, password, display_name, role, permissions, platform_name, parent_id } = req.body
   try {
     const hashed = bcrypt.hashSync(password, 10)
@@ -52,7 +70,7 @@ router.post('/', validate(CreateUserSchema), async (req: AuthRequest, res) => {
   }
 })
 
-router.put('/:id', validate(UpdateUserSchema), async (req: AuthRequest, res) => {
+router.put('/:id', adminOnly, validate(UpdateUserSchema), async (req: AuthRequest, res) => {
   const { display_name, password, role, permissions, platform_name } = req.body
   const id = parseInt(req.params.id, 10)
   // Role only updates when explicitly supplied; otherwise stored role
@@ -93,7 +111,7 @@ router.put('/:id', validate(UpdateUserSchema), async (req: AuthRequest, res) => 
   res.json(r.rows[0])
 })
 
-router.delete('/:id', async (req: AuthRequest, res) => {
+router.delete('/:id', adminOnly, async (req: AuthRequest, res) => {
   const victim = await pool.query('SELECT username FROM users WHERE id = $1', [req.params.id])
   await pool.query('DELETE FROM users WHERE id = $1', [req.params.id])
   invalidatePermsCache(parseInt(req.params.id, 10))
@@ -112,7 +130,7 @@ router.delete('/:id', async (req: AuthRequest, res) => {
  * ONCE in the response and never stored. Admin is expected to communicate it
  * securely to the user, who can then change it.
  */
-router.post('/:id/reset-password', async (req: AuthRequest, res) => {
+router.post('/:id/reset-password', adminOnly, async (req: AuthRequest, res) => {
   try {
     const id = parseInt(req.params.id, 10)
     const user = await pool.query('SELECT username, display_name FROM users WHERE id = $1', [id])
