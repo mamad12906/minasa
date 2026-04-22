@@ -18,18 +18,26 @@ router.get('/', async (req: AuthRequest, res) => {
   let idx = 1
 
   const filterUserId = req.user!.role !== 'admin' ? req.user!.id : (userId ? Number(userId) : null)
-  if (filterUserId) { where += ` AND user_id = $${idx++}`; params.push(filterUserId) }
+  if (filterUserId) { where += ` AND c.user_id = $${idx++}`; params.push(filterUserId) }
   if (search) {
-    where += ` AND (full_name ILIKE $${idx} OR phone_number ILIKE $${idx} OR card_number ILIKE $${idx} OR mother_name ILIKE $${idx})`
+    where += ` AND (c.full_name ILIKE $${idx} OR c.phone_number ILIKE $${idx} OR c.card_number ILIKE $${idx} OR c.mother_name ILIKE $${idx})`
     params.push(`%${search}%`); idx++
   }
-  if (platform) { where += ` AND platform_name = $${idx++}`; params.push(platform) }
-  if (category) { where += ` AND category = $${idx++}`; params.push(category) }
+  if (platform) { where += ` AND c.platform_name = $${idx++}`; params.push(platform) }
+  if (category) { where += ` AND c.category = $${idx++}`; params.push(category) }
 
-  const countResult = await pool.query(`SELECT COUNT(*) as total FROM customers ${where}`, params)
+  const countResult = await pool.query(
+    `SELECT COUNT(*) as total FROM customers c ${where}`,
+    params,
+  )
   const dataResult = await pool.query(
-    `SELECT *, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI') as created_at_fmt FROM customers ${where} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
-    [...params, Number(pageSize), offset]
+    `SELECT c.*,
+            TO_CHAR(c.created_at, 'YYYY-MM-DD HH24:MI') as created_at_fmt,
+            COALESCE(u.display_name, u.username, '') AS added_by_name
+     FROM customers c
+     LEFT JOIN users u ON u.id = c.user_id
+     ${where} ORDER BY c.created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
+    [...params, Number(pageSize), offset],
   )
 
   const data = dataResult.rows.map(r => ({ ...r, created_at: r.created_at_fmt || r.created_at }))
