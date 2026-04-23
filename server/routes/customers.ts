@@ -78,9 +78,14 @@ router.get('/', async (req: AuthRequest, res) => {
   const dataResult = await pool.query(
     `SELECT c.*,
             TO_CHAR(c.created_at, 'YYYY-MM-DD HH24:MI') as created_at_fmt,
-            COALESCE(u.display_name, u.username, '') AS added_by_name
+            COALESCE(u.display_name, u.username, '') AS added_by_name,
+            -- Parent of the owning user (subadmin name if any) so admin can
+            -- see which sub-tree a customer belongs to. Null for top-level
+            -- owners (main admin or orphaned parent_id).
+            COALESCE(pu.display_name, pu.username, '') AS parent_admin_name
      FROM customers c
      LEFT JOIN users u ON u.id = c.user_id
+     LEFT JOIN users pu ON pu.id = u.parent_id AND pu.role = 'subadmin'
      ${where} ORDER BY c.created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
     [...params, Number(pageSize), offset],
   )
