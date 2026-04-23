@@ -48,6 +48,32 @@ router.get('/', async (req: AuthRequest, res) => {
   return res.status(403).json({ error: 'صلاحية الأدمن فقط' })
 })
 
+/**
+ * Delegation rule — a subadmin can only grant permissions they themselves
+ * hold. Rewrites the caller's incoming permissions JSON stripping any key
+ * they don't possess. Admin bypasses this entirely.
+ */
+function filterGrantablePermissions(
+  callerRole: string,
+  callerPerms: Record<string, boolean> | undefined,
+  incomingJson: string | undefined,
+): string {
+  if (callerRole === 'admin') return incomingJson ?? '{}'
+  const ownPerms = callerPerms ?? {}
+  let incoming: Record<string, unknown> = {}
+  try { incoming = JSON.parse(incomingJson || '{}') } catch { incoming = {} }
+  const out: Record<string, boolean> = {}
+  for (const [k, v] of Object.entries(incoming)) {
+    if (v === true) {
+      // Only allow setting a key to true if the caller also has it.
+      if (ownPerms[k] === true) out[k] = true
+    } else {
+      out[k] = false
+    }
+  }
+  return JSON.stringify(out)
+}
+
 router.post('/', validate(CreateUserSchema), async (req: AuthRequest, res) => {
   const { username, password, display_name, role, permissions, platform_name, parent_id } = req.body
   // Authorization: admin does anything; subadmin can create regular users
@@ -68,9 +94,11 @@ router.post('/', validate(CreateUserSchema), async (req: AuthRequest, res) => {
     const effectiveParent = callerRole === 'admin'
       ? (parent_id ?? req.user!.id)
       : req.user!.id
+    const filteredPerms = filterGrantablePermissions(
+      callerRole, req.user!.permissions, permissions)
     const r = await pool.query(
       'INSERT INTO users (username, password, display_name, role, permissions, platform_name, parent_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
-      [username, hashed, display_name, role || 'user', permissions || '{}', platform_name || '', effectiveParent],
+      [username, hashed, display_name, role || 'user', filteredPerms, platform_name || '', effectiveParent],
     )
     await audit(req, 'create', 'user', r.rows[0].id,
       `created user ${username} (${display_name}) role=${role || 'user'}`)
@@ -82,7 +110,8 @@ router.post('/', validate(CreateUserSchema), async (req: AuthRequest, res) => {
 })
 
 router.put('/:id', validate(UpdateUserSchema), async (req: AuthRequest, res) => {
-  const { display_name, password, role, permissions, platform_name, parent_id } = req.body
+  const { display_name, password, role, platform_name, parent_id } = req.body
+  let { permissions } = req.body
   const id = parseInt(req.params.id, 10)
   // Subadmin gate: can only edit their own sub-users, and only if the
   // edit_users permission is granted. Role/parent changes are blocked for
@@ -99,6 +128,9 @@ router.put('/:id', validate(UpdateUserSchema), async (req: AuthRequest, res) => 
     if (role || parent_id !== undefined) {
       return res.status(403).json({ error: 'لا يمكنك تغيير الدور أو الارتباط' })
     }
+    // Delegation rule: subadmin can't grant permissions they don't own.
+    permissions = filterGrantablePermissions(
+      callerRole, req.user!.permissions, permissions)
   }
   // Build the dynamic UPDATE. Optional fields (role, parent_id) only get
   // written when the caller explicitly supplies them.
