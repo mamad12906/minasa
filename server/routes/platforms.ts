@@ -1,18 +1,24 @@
 import { Router } from 'express'
 import { pool } from '../db'
-import { authMiddleware, adminOnly } from '../middleware/auth'
+import { authMiddleware, adminOnly, AuthRequest } from '../middleware/auth'
 
 const router = Router()
 router.use(authMiddleware)
 
-router.get('/', async (_req, res) => {
-  const r = await pool.query('SELECT * FROM platforms ORDER BY name ASC')
+router.get('/', async (req: AuthRequest, res) => {
+  const r = await pool.query(
+    'SELECT * FROM platforms WHERE tenant_id = $1 ORDER BY name ASC',
+    [req.user!.tenant_id],
+  )
   res.json(r.rows)
 })
 
-router.post('/', adminOnly, async (req, res) => {
+router.post('/', adminOnly, async (req: AuthRequest, res) => {
   try {
-    await pool.query('INSERT INTO platforms (name) VALUES ($1) ON CONFLICT DO NOTHING', [req.body.name])
+    await pool.query(
+      'INSERT INTO platforms (tenant_id, name) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [req.user!.tenant_id, req.body.name],
+    )
     res.json({ success: true })
   } catch (err: any) {
     console.error('[platforms.create]', err.message)
@@ -20,8 +26,11 @@ router.post('/', adminOnly, async (req, res) => {
   }
 })
 
-router.delete('/:id', adminOnly, async (req, res) => {
-  await pool.query('DELETE FROM platforms WHERE id = $1', [req.params.id])
+router.delete('/:id', adminOnly, async (req: AuthRequest, res) => {
+  await pool.query(
+    'DELETE FROM platforms WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.user!.tenant_id],
+  )
   res.json({ success: true })
 })
 

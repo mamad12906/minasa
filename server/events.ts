@@ -24,6 +24,7 @@ export type AppEventKind =
 
 export interface AppEvent {
   kind: AppEventKind
+  tenant_id: number
   actor?: { id: number; username: string } | null
   entity_id?: number | null
   entity_name?: string
@@ -50,7 +51,7 @@ bus.setMaxListeners(200)
  */
 export function emitEvent(
   kind: AppEventKind,
-  actor: { id?: number; username?: string } | null | undefined,
+  actor: { id?: number; username?: string; tenant_id?: number } | null | undefined,
   entityId: number | null = null,
   entityName: string = '',
   details: string = '',
@@ -58,6 +59,7 @@ export function emitEvent(
   try {
     bus.emitEvent({
       kind,
+      tenant_id: actor?.tenant_id ?? 1,
       actor: actor && actor.id != null
         ? { id: actor.id, username: actor.username || '' }
         : null,

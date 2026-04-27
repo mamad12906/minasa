@@ -24,13 +24,15 @@ router.get('/online', adminOnly, async (_req, res) => {
 
 router.get('/', async (req: AuthRequest, res) => {
   const role = req.user!.role
+  const tenantId = req.user!.tenant_id
   if (role === 'admin') {
     const r = await pool.query(`
       SELECT u.*, COALESCE(c.count, 0)::int as customer_count
       FROM users u
-      LEFT JOIN (SELECT user_id, COUNT(*) as count FROM customers GROUP BY user_id) c ON c.user_id = u.id
+      LEFT JOIN (SELECT user_id, COUNT(*) as count FROM customers WHERE tenant_id = $1 GROUP BY user_id) c ON c.user_id = u.id
+      WHERE u.tenant_id = $1
       ORDER BY u.created_at ASC
-    `)
+    `, [tenantId])
     return res.json(r.rows)
   }
   if (role === 'subadmin') {
@@ -38,10 +40,10 @@ router.get('/', async (req: AuthRequest, res) => {
     const r = await pool.query(
       `SELECT u.*, COALESCE(c.count, 0)::int as customer_count
        FROM users u
-       LEFT JOIN (SELECT user_id, COUNT(*) as count FROM customers GROUP BY user_id) c ON c.user_id = u.id
-       WHERE u.id = $1 OR u.parent_id = $1
+       LEFT JOIN (SELECT user_id, COUNT(*) as count FROM customers WHERE tenant_id = $2 GROUP BY user_id) c ON c.user_id = u.id
+       WHERE u.tenant_id = $2 AND (u.id = $1 OR u.parent_id = $1)
        ORDER BY u.created_at ASC`,
-      [req.user!.id],
+      [req.user!.id, tenantId],
     )
     return res.json(r.rows)
   }
@@ -79,6 +81,7 @@ router.post('/', validate(CreateUserSchema), async (req: AuthRequest, res) => {
   // Authorization: admin does anything; subadmin can create regular users
   // under themselves only IF they hold the create_users permission key.
   const callerRole = req.user!.role
+  const tenantId = req.user!.tenant_id
   if (callerRole !== 'admin') {
     if (callerRole !== 'subadmin' || req.user!.permissions?.create_users !== true) {
       return res.status(403).json({ error: 'ليس لديك صلاحية إنشاء مستخدمين' })
@@ -97,8 +100,8 @@ router.post('/', validate(CreateUserSchema), async (req: AuthRequest, res) => {
     const filteredPerms = filterGrantablePermissions(
       callerRole, req.user!.permissions, permissions)
     const r = await pool.query(
-      'INSERT INTO users (username, password, display_name, role, permissions, platform_name, parent_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
-      [username, hashed, display_name, role || 'user', filteredPerms, platform_name || '', effectiveParent],
+      'INSERT INTO users (tenant_id, username, password, display_name, role, permissions, platform_name, parent_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+      [tenantId, username, hashed, display_name, role || 'user', filteredPerms, platform_name || '', effectiveParent],
     )
     await audit(req, 'create', 'user', r.rows[0].id,
       `created user ${username} (${display_name}) role=${role || 'user'}`)
@@ -113,6 +116,7 @@ router.put('/:id', validate(UpdateUserSchema), async (req: AuthRequest, res) => 
   const { display_name, password, role, platform_name, parent_id } = req.body
   let { permissions } = req.body
   const id = parseInt(req.params.id, 10)
+  const tenantId = req.user!.tenant_id
   // Subadmin gate: can only edit their own sub-users, and only if the
   // edit_users permission is granted. Role/parent changes are blocked for
   // them to prevent self-promotion or reparenting outside the hierarchy.
@@ -121,7 +125,10 @@ router.put('/:id', validate(UpdateUserSchema), async (req: AuthRequest, res) => 
     if (callerRole !== 'subadmin' || req.user!.permissions?.edit_users !== true) {
       return res.status(403).json({ error: 'ليس لديك صلاحية تعديل مستخدمين' })
     }
-    const target = await pool.query('SELECT parent_id FROM users WHERE id = $1', [id])
+    const target = await pool.query(
+      'SELECT parent_id FROM users WHERE id = $1 AND tenant_id = $2',
+      [id, tenantId],
+    )
     if (target.rows[0]?.parent_id !== req.user!.id) {
       return res.status(403).json({ error: 'لا يمكنك تعديل هذا المستخدم' })
     }
@@ -131,6 +138,15 @@ router.put('/:id', validate(UpdateUserSchema), async (req: AuthRequest, res) => 
     // Delegation rule: subadmin can't grant permissions they don't own.
     permissions = filterGrantablePermissions(
       callerRole, req.user!.permissions, permissions)
+  } else {
+    // Admin path — confirm target is in the same tenant before mutating.
+    const target = await pool.query(
+      'SELECT id FROM users WHERE id = $1 AND tenant_id = $2',
+      [id, tenantId],
+    )
+    if (target.rows.length === 0) {
+      return res.status(404).json({ error: 'المستخدم غير موجود' })
+    }
   }
   // Build the dynamic UPDATE. Optional fields (role, parent_id) only get
   // written when the caller explicitly supplies them.
@@ -153,13 +169,19 @@ router.put('/:id', validate(UpdateUserSchema), async (req: AuthRequest, res) => 
     sets.push(`parent_id=$${i++}`)
     params.push(parent_id)
   }
-  params.push(id)
-  await pool.query(`UPDATE users SET ${sets.join(', ')} WHERE id=$${i}`, params)
+  params.push(id, tenantId)
+  await pool.query(
+    `UPDATE users SET ${sets.join(', ')} WHERE id=$${i++} AND tenant_id=$${i}`,
+    params,
+  )
   if (password) invalidatePwdVerCache(id)
   // Permissions cache keyed by user id — drop it so requirePermission()
   // on the next request fetches fresh from the DB.
   invalidatePermsCache(id)
-  const r = await pool.query('SELECT * FROM users WHERE id = $1', [id])
+  const r = await pool.query(
+    'SELECT * FROM users WHERE id = $1 AND tenant_id = $2',
+    [id, tenantId],
+  )
   await audit(req, 'update', 'user', id,
     password ? 'updated user (password changed)' : 'updated user')
   emitEvent('user.updated', req.user, r.rows[0]?.id ?? null,
@@ -169,23 +191,34 @@ router.put('/:id', validate(UpdateUserSchema), async (req: AuthRequest, res) => 
 
 router.delete('/:id', async (req: AuthRequest, res) => {
   const id = parseInt(req.params.id, 10)
+  const tenantId = req.user!.tenant_id
   const callerRole = req.user!.role
   if (callerRole !== 'admin') {
     if (callerRole !== 'subadmin' || req.user!.permissions?.delete_users !== true) {
       return res.status(403).json({ error: 'ليس لديك صلاحية حذف مستخدمين' })
     }
-    const target = await pool.query('SELECT parent_id FROM users WHERE id = $1', [id])
+    const target = await pool.query(
+      'SELECT parent_id FROM users WHERE id = $1 AND tenant_id = $2',
+      [id, tenantId],
+    )
     if (target.rows[0]?.parent_id !== req.user!.id) {
       return res.status(403).json({ error: 'لا يمكنك حذف هذا المستخدم' })
     }
   }
-  const victim = await pool.query('SELECT username FROM users WHERE id = $1', [req.params.id])
-  await pool.query('DELETE FROM users WHERE id = $1', [req.params.id])
-  invalidatePermsCache(parseInt(req.params.id, 10))
-  invalidatePwdVerCache(parseInt(req.params.id, 10))
-  await audit(req, 'delete', 'user', parseInt(req.params.id, 10),
+  const victim = await pool.query(
+    'SELECT username FROM users WHERE id = $1 AND tenant_id = $2',
+    [id, tenantId],
+  )
+  if (victim.rows.length === 0) return res.status(404).json({ error: 'المستخدم غير موجود' })
+  await pool.query(
+    'DELETE FROM users WHERE id = $1 AND tenant_id = $2',
+    [id, tenantId],
+  )
+  invalidatePermsCache(id)
+  invalidatePwdVerCache(id)
+  await audit(req, 'delete', 'user', id,
     `deleted user ${victim.rows[0]?.username || ''}`)
-  emitEvent('user.deleted', req.user, parseInt(req.params.id, 10),
+  emitEvent('user.deleted', req.user, id,
     victim.rows[0]?.username || '')
   res.json({ success: true })
 })
@@ -200,7 +233,11 @@ router.delete('/:id', async (req: AuthRequest, res) => {
 router.post('/:id/reset-password', adminOnly, async (req: AuthRequest, res) => {
   try {
     const id = parseInt(req.params.id, 10)
-    const user = await pool.query('SELECT username, display_name FROM users WHERE id = $1', [id])
+    const tenantId = req.user!.tenant_id
+    const user = await pool.query(
+      'SELECT username, display_name FROM users WHERE id = $1 AND tenant_id = $2',
+      [id, tenantId],
+    )
     if (user.rows.length === 0) {
       return res.status(404).json({ error: 'المستخدم غير موجود' })
     }
@@ -208,8 +245,8 @@ router.post('/:id/reset-password', adminOnly, async (req: AuthRequest, res) => {
       .replace(/[+/=]/g, '').substring(0, 10)
     const hashed = bcrypt.hashSync(newPassword, 10)
     await pool.query(
-      'UPDATE users SET password = $1, password_version = password_version + 1 WHERE id = $2',
-      [hashed, id])
+      'UPDATE users SET password = $1, password_version = password_version + 1 WHERE id = $2 AND tenant_id = $3',
+      [hashed, id, tenantId])
     invalidatePwdVerCache(id)
     await audit(req, 'reset_password', 'user', id,
       `admin reset password for ${user.rows[0].username}`)

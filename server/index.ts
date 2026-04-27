@@ -2,6 +2,8 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import dotenv from 'dotenv'
+import fs from 'fs'
+import path from 'path'
 import { initDB } from './db'
 import authRoutes from './routes/auth'
 import customerRoutes from './routes/customers'
@@ -15,6 +17,7 @@ import auditRoutes from './routes/audit'
 import eventsRoutes from './routes/events'
 import dashboardRoutes from './routes/dashboard'
 import mobileUpdateRoutes from './routes/mobile-update'
+import tenantRoutes from './routes/tenants'
 
 dotenv.config()
 
@@ -121,8 +124,39 @@ app.use('/api', (req, res, next) => {
 })
 
 // Health check (no API key needed)
-app.get('/', (_req, res) => res.json({ status: 'ok' }))
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
+
+// Public web pages (no API key check — pages are mounted before /api). Each
+// HTML embeds the API key via meta tag so its JS can call /api/* on the
+// visitor's behalf. Same security model as the mobile app, which embeds the
+// key at build time. Real auth lives in the JWT.
+const PUBLIC_DIR = path.join(__dirname, 'public')
+const htmlCache = new Map<string, string>()
+function renderHtml(file: string): string {
+  const cached = htmlCache.get(file)
+  if (cached != null) return cached
+  const fullPath = path.join(PUBLIC_DIR, file)
+  if (!fullPath.startsWith(PUBLIC_DIR + path.sep)) return ''
+  if (!fs.existsSync(fullPath)) return ''
+  const raw = fs.readFileSync(fullPath, 'utf-8')
+  // process.env.API_KEY may hold a comma-separated rotation list — pick the
+  // first valid one for the page. Strip any HTML-meaningful characters
+  // defensively even though the key shape doesn't include them.
+  const firstKey = (validApiKeys[0] || '').replace(/[<>"']/g, '')
+  const rendered = raw.split('__API_KEY__').join(firstKey)
+  htmlCache.set(file, rendered)
+  return rendered
+}
+function servePage(file: string) {
+  return (_req: express.Request, res: express.Response) => {
+    const html = renderHtml(file)
+    if (!html) return res.status(404).send(`${file} not found`)
+    res.type('html').send(html)
+  }
+}
+app.get(['/', '/signup', '/signup.html'], servePage('signup.html'))
+app.get(['/login', '/login.html'], servePage('login.html'))
+app.get(['/dashboard', '/dashboard.html'], servePage('dashboard.html'))
 
 // Mobile update - public (app needs it before login)
 app.use('/api/mobile', mobileUpdateRoutes)
@@ -139,6 +173,7 @@ app.use('/api/ministries', ministryRoutes)
 app.use('/api/audit', auditRoutes)
 app.use('/api/events', eventsRoutes)
 app.use('/api/dashboard', dashboardRoutes)
+app.use('/api/tenants', tenantRoutes)
 
 async function start() {
   await initDB()

@@ -16,6 +16,7 @@ export interface AuthRequest extends Request {
     role: string
     display_name: string
     platform_name: string
+    tenant_id: number
     permissions?: Record<string, boolean>
   }
 }
@@ -28,6 +29,7 @@ export function generateToken(user: any): string {
       role: user.role,
       display_name: user.display_name,
       platform_name: user.platform_name || '',
+      tenant_id: user.tenant_id ?? 1,
       pwdVer: user.password_version ?? 1,
     },
     JWT_SECRET,
@@ -120,6 +122,11 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
   if (decoded.role !== 'admin') {
     decoded.permissions = await currentPermissions(decoded.id)
   }
+
+  // Tokens minted before the SaaS migration carry no tenant_id — default
+  // them to 1 (Minasa Default) so existing sessions keep working through
+  // the 30-day expiry; renewed tokens will embed it explicitly.
+  if (decoded.tenant_id == null) decoded.tenant_id = 1
 
   req.user = decoded
   touch(decoded?.id)

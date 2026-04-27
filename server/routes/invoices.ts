@@ -20,14 +20,15 @@ router.get('/', async (req: AuthRequest, res) => {
   const { page = 1, pageSize = 50, search, status, customer_id } = req.query
   const offset = (Number(page) - 1) * Number(pageSize)
   const params: any[] = []
-  let where = 'WHERE 1=1'
-  let idx = 1
+  let where = `WHERE i.tenant_id = $1`
+  params.push(req.user!.tenant_id)
+  let idx = 2
 
   // Scope: admin sees all; subadmin sees their own + sub-users' customers'
   // invoices; regular user sees only their own customers' invoices.
   const role = req.user!.role
   if (role === 'subadmin') {
-    where += ` AND (c.user_id = $${idx} OR c.user_id IN (SELECT id FROM users WHERE parent_id = $${idx}))`
+    where += ` AND (c.user_id = $${idx} OR c.user_id IN (SELECT id FROM users WHERE parent_id = $${idx} AND tenant_id = i.tenant_id))`
     params.push(req.user!.id); idx++
   } else if (role !== 'admin') {
     where += ` AND c.user_id = $${idx++}`
@@ -71,7 +72,10 @@ router.get('/', async (req: AuthRequest, res) => {
 
 // Get single invoice
 router.get('/:id', async (req: AuthRequest, res) => {
-  const r = await pool.query('SELECT * FROM invoices WHERE id = $1', [req.params.id])
+  const r = await pool.query(
+    'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.user!.tenant_id],
+  )
   if (r.rows.length === 0) return res.status(404).json({ error: 'not found' })
   const row = r.rows[0]
   res.json({ ...row, amount: Number(row.amount), paid_amount: Number(row.paid_amount) })
@@ -80,9 +84,14 @@ router.get('/:id', async (req: AuthRequest, res) => {
 // Create invoice
 router.post('/', requirePermission('add_invoice'), validate(CreateInvoiceSchema), async (req: AuthRequest, res) => {
   const input = req.body
+  const tenantId = req.user!.tenant_id
 
-  // Verify customer exists (foreign key would fail otherwise with a cryptic error).
-  const cust = await pool.query('SELECT id, full_name, phone_number, user_id FROM customers WHERE id = $1', [input.customer_id])
+  // Verify customer exists in this tenant (cross-tenant references would
+  // otherwise create orphaned invoices).
+  const cust = await pool.query(
+    'SELECT id, full_name, phone_number, user_id FROM customers WHERE id = $1 AND tenant_id = $2',
+    [input.customer_id, tenantId],
+  )
   if (cust.rows.length === 0) {
     return res.status(400).json({ error: 'الزبون غير موجود' })
   }
@@ -95,9 +104,9 @@ router.post('/', requirePermission('add_invoice'), validate(CreateInvoiceSchema)
   const phone = input.customer_phone || customer.phone_number || ''
 
   const result = await pool.query(
-    `INSERT INTO invoices (customer_id, customer_name, customer_phone, platform_name, amount, paid_amount, status, due_date, notes, user_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-    [input.customer_id, name, phone, input.platform_name || '', amount, paid, status, input.due_date || '', input.notes || '', req.user!.id]
+    `INSERT INTO invoices (tenant_id, customer_id, customer_name, customer_phone, platform_name, amount, paid_amount, status, due_date, notes, user_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+    [tenantId, input.customer_id, name, phone, input.platform_name || '', amount, paid, status, input.due_date || '', input.notes || '', req.user!.id]
   )
   const invoice = result.rows[0]
 
@@ -111,8 +120,12 @@ router.post('/', requirePermission('add_invoice'), validate(CreateInvoiceSchema)
 router.put('/:id', requirePermission('edit_invoice'), validate(UpdateInvoiceSchema), async (req: AuthRequest, res) => {
   const input = req.body
   const id = parseInt(req.params.id, 10)
+  const tenantId = req.user!.tenant_id
 
-  const existing = await pool.query('SELECT * FROM invoices WHERE id = $1', [id])
+  const existing = await pool.query(
+    'SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2',
+    [id, tenantId],
+  )
   if (existing.rows.length === 0) return res.status(404).json({ error: 'not found' })
   const cur = existing.rows[0]
 
@@ -132,7 +145,7 @@ router.put('/:id', requirePermission('edit_invoice'), validate(UpdateInvoiceSche
        due_date = $8,
        notes = $9,
        updated_at = NOW()
-     WHERE id = $10 RETURNING *`,
+     WHERE id = $10 AND tenant_id = $11 RETURNING *`,
     [
       input.customer_id ?? cur.customer_id,
       input.customer_name ?? cur.customer_name,
@@ -144,6 +157,7 @@ router.put('/:id', requirePermission('edit_invoice'), validate(UpdateInvoiceSche
       input.due_date ?? cur.due_date,
       input.notes ?? cur.notes,
       id,
+      tenantId,
     ]
   )
   const invoice = result.rows[0]
@@ -156,8 +170,16 @@ router.put('/:id', requirePermission('edit_invoice'), validate(UpdateInvoiceSche
 // Delete invoice
 router.delete('/:id', requirePermission('delete_invoice'), async (req: AuthRequest, res) => {
   const id = parseInt(req.params.id, 10)
-  const existing = await pool.query('SELECT customer_name FROM invoices WHERE id = $1', [id])
-  await pool.query('DELETE FROM invoices WHERE id = $1', [id])
+  const tenantId = req.user!.tenant_id
+  const existing = await pool.query(
+    'SELECT customer_name FROM invoices WHERE id = $1 AND tenant_id = $2',
+    [id, tenantId],
+  )
+  if (existing.rows.length === 0) return res.status(404).json({ error: 'not found' })
+  await pool.query(
+    'DELETE FROM invoices WHERE id = $1 AND tenant_id = $2',
+    [id, tenantId],
+  )
   await audit(req, 'delete', 'invoice', id,
     `deleted invoice #${id} (${existing.rows[0]?.customer_name || ''})`)
   emitEvent('invoice.deleted', req.user, id, existing.rows[0]?.customer_name || '')
