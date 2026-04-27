@@ -29,13 +29,8 @@ router.get('/', authMiddleware, adminOnly, async (req: AuthRequest, res) => {
     at: Date.now(),
   })}\n\n`)
 
-  const callerTenant = req.user!.tenant_id
   const onEvent = (ev: AppEvent) => {
     try {
-      // Drop events from other tenants — admin of tenant A must never see
-      // tenant B's activity stream, even if both are connected to this
-      // process.
-      if (ev.tenant_id !== callerTenant) return
       // SSE frame: `event:` sets the type, `data:` carries the payload.
       res.write(`event: ${ev.kind}\ndata: ${JSON.stringify(ev)}\n\n`)
     } catch { /* socket probably closed; cleanup below handles it */ }

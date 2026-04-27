@@ -39,12 +39,12 @@ function loginLimit(ip: string): boolean {
   return true
 }
 
-async function logLogin(userId: number | null, username: string, action: string, details: string, ip: string, tenantId: number = 1) {
+async function logLogin(userId: number | null, username: string, action: string, details: string, ip: string) {
   try {
     await pool.query(
-      `INSERT INTO audit_log (tenant_id, user_id, username, action, entity_type, details, ip)
-       VALUES ($1, $2, $3, $4, 'auth', $5, $6)`,
-      [tenantId, userId, username, action, details, ip],
+      `INSERT INTO audit_log (user_id, username, action, entity_type, details, ip)
+       VALUES ($1, $2, $3, 'auth', $4, $5)`,
+      [userId, username, action, details, ip],
     )
   } catch (e) {
     console.error('[auth.audit]', (e as Error).message)
@@ -52,28 +52,12 @@ async function logLogin(userId: number | null, username: string, action: string,
 }
 
 router.post('/login', async (req, res) => {
-  const { username, password, tenant_slug } = req.body
+  const { username, password } = req.body
   const ip = clientIp(req)
   if (!loginLimit(ip)) {
     return res.status(429).json({ error: 'محاولات دخول كثيرة، حاول بعد دقيقة' })
   }
-  // Resolve tenant from slug — defaults to 'default' so existing mobile
-  // clients (which don't yet send tenant_slug) still authenticate against
-  // the original single-tenant deployment.
-  const slug = (tenant_slug || 'default').toString().trim().toLowerCase()
-  const tenantRow = await pool.query(
-    "SELECT id FROM tenants WHERE slug = $1 AND status = 'active' LIMIT 1",
-    [slug],
-  )
-  if (tenantRow.rows.length === 0) {
-    await logLogin(null, String(username || ''), 'login_failed', `unknown tenant: ${slug}`, ip)
-    return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور خطأ' })
-  }
-  const tenantId = tenantRow.rows[0].id as number
-  const result = await pool.query(
-    'SELECT * FROM users WHERE username = $1 AND tenant_id = $2',
-    [username, tenantId],
-  )
+  const result = await pool.query('SELECT * FROM users WHERE username = $1', [username])
   if (result.rows.length === 0) {
     await logLogin(null, String(username || ''), 'login_failed', 'unknown user', ip)
     return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور خطأ' })
@@ -98,17 +82,17 @@ router.post('/login', async (req, res) => {
   }
 
   if (!valid) {
-    await logLogin(user.id, user.username, 'login_failed', 'bad password', ip, user.tenant_id)
+    await logLogin(user.id, user.username, 'login_failed', 'bad password', ip)
     emitEvent('auth.login_failed', { id: user.id, username: user.username },
       user.id, user.display_name || user.username, ip)
     return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور خطأ' })
   }
 
-  await logLogin(user.id, user.username, 'login', '', ip, user.tenant_id)
+  await logLogin(user.id, user.username, 'login', '', ip)
   emitEvent('auth.login', { id: user.id, username: user.username },
     user.id, user.display_name || user.username, ip)
   const token = generateToken(user)
-  res.json({ token, user: { id: user.id, username: user.username, display_name: user.display_name, role: user.role, permissions: user.permissions, platform_name: user.platform_name, tenant_id: user.tenant_id } })
+  res.json({ token, user: { id: user.id, username: user.username, display_name: user.display_name, role: user.role, permissions: user.permissions, platform_name: user.platform_name } })
 })
 
 // Return the authenticated user's current profile — specifically so mobile
@@ -117,8 +101,8 @@ router.post('/login', async (req, res) => {
 // enrollment time, which goes stale the moment admin edits perms.
 router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
   const r = await pool.query(
-    'SELECT id, username, display_name, role, permissions, platform_name, tenant_id FROM users WHERE id = $1 AND tenant_id = $2',
-    [req.user!.id, req.user!.tenant_id],
+    'SELECT id, username, display_name, role, permissions, platform_name FROM users WHERE id = $1',
+    [req.user!.id],
   )
   if (r.rows.length === 0) return res.status(404).json({ error: 'الحساب غير موجود' })
   res.json(r.rows[0])

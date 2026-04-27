@@ -18,10 +18,9 @@ export async function audit(
   try {
     const ip = (req.ip || req.socket?.remoteAddress || '').toString()
     await pool.query(
-      `INSERT INTO audit_log (tenant_id, user_id, username, action, entity_type, entity_id, details, ip)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO audit_log (user_id, username, action, entity_type, entity_id, details, ip)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
-        req.user?.tenant_id ?? 1,
         req.user?.id ?? null,
         req.user?.username ?? '',
         action,
