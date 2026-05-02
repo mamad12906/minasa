@@ -2,7 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import dotenv from 'dotenv'
-import { initDB } from './db'
+import { initDB, pool } from './db'
 import authRoutes from './routes/auth'
 import customerRoutes from './routes/customers'
 import invoiceRoutes from './routes/invoices'
@@ -61,7 +61,10 @@ app.use('/api', (req, res, next) => {
 })
 
 // Rate limiting - simple in-memory. A periodic sweep prunes stale entries
-// so the map can't grow unbounded over long uptimes.
+// so the map can't grow unbounded over long uptimes. A hard cap also evicts
+// the oldest entry on insert so a burst of unique IPs between sweeps can't
+// blow up memory before the sweep fires.
+const RATE_LIMITS_MAX_KEYS = 10_000
 const rateLimits = new Map<string, { count: number; reset: number }>()
 const RATE_WINDOW_MS = 60_000
 const RATE_MAX = 200
@@ -82,6 +85,12 @@ app.use('/api', (req, res, next) => {
     }
     limit.count++
   } else {
+    // Eviction: if the map exceeds its cap, drop the oldest key (Map
+    // iteration order is insertion order). Cheap O(1) without sorting.
+    if (rateLimits.size >= RATE_LIMITS_MAX_KEYS) {
+      const oldest = rateLimits.keys().next().value
+      if (oldest != null) rateLimits.delete(oldest)
+    }
     rateLimits.set(ip, { count: 1, reset: now + RATE_WINDOW_MS })
   }
   next()
@@ -115,14 +124,61 @@ app.use('/api', (req, res, next) => {
     }
     limit.count++
   } else {
+    if (destructiveLimits.size >= RATE_LIMITS_MAX_KEYS) {
+      const oldest = destructiveLimits.keys().next().value
+      if (oldest != null) destructiveLimits.delete(oldest)
+    }
     destructiveLimits.set(ip, { count: 1, reset: now + DESTRUCTIVE_WINDOW_MS })
   }
   next()
 })
 
-// Health check (no API key needed)
+// Per-target-user limiter for password resets — separate from the per-IP
+// destructive bucket. Prevents an admin (or stolen admin token) from
+// cycling a single user's password rapidly to lock them out or generate
+// noise. Hourly window, 3 resets per target user.
+const PWRESET_WINDOW_MS = 60 * 60_000
+const PWRESET_MAX = 3
+const pwResetByUser = new Map<string, { count: number; reset: number }>()
+setInterval(() => {
+  const now = Date.now()
+  for (const [k, v] of pwResetByUser) {
+    if (v.reset < now) pwResetByUser.delete(k)
+  }
+}, PWRESET_WINDOW_MS).unref()
+
+app.use('/api/users', (req, res, next) => {
+  // Match POST /api/users/:id/reset-password and pull `:id` from the path.
+  const m = req.method === 'POST' && /^\/(\d+)\/reset-password\/?$/.exec(req.path)
+  if (!m) return next()
+  const userId = m[1]
+  const now = Date.now()
+  const e = pwResetByUser.get(userId)
+  if (e && now < e.reset) {
+    if (e.count >= PWRESET_MAX) {
+      return res.status(429).json({ error: 'تم إعادة تعيين كلمة المرور لهذا المستخدم بكثرة، حاول بعد ساعة' })
+    }
+    e.count++
+  } else {
+    pwResetByUser.set(userId, { count: 1, reset: now + PWRESET_WINDOW_MS })
+  }
+  next()
+})
+
+// Health checks. `/` is the cheap liveness probe; `/health` actually
+// pings PostgreSQL so a load balancer or pm2 restart loop can detect a
+// dead pool — common failure mode that the old static `{status:'ok'}`
+// hid completely.
 app.get('/', (_req, res) => res.json({ status: 'ok' }))
-app.get('/health', (_req, res) => res.json({ status: 'ok' }))
+app.get('/health', async (_req, res) => {
+  try {
+    await pool.query('SELECT 1')
+    res.json({ status: 'ok', db: 'ok' })
+  } catch (e: any) {
+    console.error('[health] DB probe failed:', e.message)
+    res.status(503).json({ status: 'degraded', db: 'down' })
+  }
+})
 
 // Mobile update - public (app needs it before login)
 app.use('/api/mobile', mobileUpdateRoutes)
@@ -142,9 +198,32 @@ app.use('/api/dashboard', dashboardRoutes)
 
 async function start() {
   await initDB()
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`Minasa API running on port ${PORT}`)
   })
+
+  // Graceful shutdown — pm2 sends SIGINT first, SIGKILL after a grace
+  // window. We give in-flight requests up to 8s to finish, then close the
+  // pg pool so its connections aren't left hanging from PostgreSQL's POV.
+  // Without this, a restart could leak idle clients in the pool until
+  // their idle_in_transaction_session_timeout fires.
+  let shuttingDown = false
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) return
+    shuttingDown = true
+    console.log(`[${signal}] shutting down...`)
+    server.close(async () => {
+      try { await pool.end() } catch (e) { console.error('[shutdown] pool.end:', (e as Error).message) }
+      console.log('[shutdown] done')
+      process.exit(0)
+    })
+    setTimeout(() => {
+      console.error('[shutdown] grace window elapsed, forcing exit')
+      process.exit(1)
+    }, 8000).unref()
+  }
+  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  process.on('SIGINT', () => shutdown('SIGINT'))
 }
 
 start().catch(console.error)

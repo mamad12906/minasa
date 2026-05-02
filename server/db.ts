@@ -2,9 +2,14 @@ import { Pool } from 'pg'
 import dotenv from 'dotenv'
 dotenv.config()
 
+// Bump pool max from pg's default of 10. Under burst (admin loading
+// dashboard + listing customers + audit page concurrently), the default
+// can saturate and queue requests. 20 is comfortable for a single VPS;
+// override with PG_POOL_MAX env var for staging/load tests.
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: parseInt(process.env.PG_POOL_MAX || '20', 10),
 })
 
 export async function initDB() {
@@ -153,17 +158,35 @@ export async function initDB() {
     // Generate secure random password and bcrypt hash (never store plain)
     const crypto = await import('crypto')
     const bcrypt = await import('bcryptjs')
+    const fs = await import('fs')
+    const path = await import('path')
     const randomPw = crypto.randomBytes(9).toString('base64').replace(/[+/=]/g, '').substring(0, 12)
     const hashedPw = await bcrypt.default.hash(randomPw, 10)
     await pool.query(
       "INSERT INTO users (username, password, display_name, role, permissions) VALUES ($1, $2, $3, $4, $5)",
       ['admin', hashedPw, 'مدير النظام', 'admin', '{}']
     )
-    console.log('\n' + '='.repeat(60))
-    console.log('INITIAL ADMIN CREDENTIALS (save immediately):')
-    console.log(`  username: admin`)
-    console.log(`  password: ${randomPw}`)
-    console.log('='.repeat(60) + '\n')
+    // Write the bootstrap password to a 0600 file in the working directory
+    // so the operator can pick it up without having stdout/journalctl record
+    // the plaintext. stderr also gets a pointer so the boot log isn't silent.
+    const credPath = path.default.resolve(process.cwd(), '.initial-admin-password')
+    try {
+      fs.default.writeFileSync(
+        credPath,
+        `username: admin\npassword: ${randomPw}\ngenerated: ${new Date().toISOString()}\n`,
+        { mode: 0o600 },
+      )
+      process.stderr.write(
+        `[bootstrap] initial admin credentials written to ${credPath}\n` +
+        `[bootstrap] read with: cat ${credPath} && rm ${credPath}\n`,
+      )
+    } catch (e) {
+      // Fall back to stderr — better than silent failure on a locked-down FS.
+      process.stderr.write(
+        `[bootstrap] could not write ${credPath}: ${(e as Error).message}\n` +
+        `[bootstrap] INITIAL ADMIN PASSWORD: ${randomPw}\n`,
+      )
+    }
   }
 
   // Rehash the admin's password if it's still plain text. A bcrypt hash is
