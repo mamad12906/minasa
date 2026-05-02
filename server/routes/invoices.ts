@@ -5,6 +5,7 @@ import { requirePermission } from '../middleware/permissions'
 import { audit } from '../audit'
 import { validate, CreateInvoiceSchema, UpdateInvoiceSchema } from '../schemas'
 import { emitEvent } from '../events'
+import { canAccessUser } from '../utils/scope'
 
 const router = Router()
 router.use(authMiddleware)
@@ -69,11 +70,22 @@ router.get('/', async (req: AuthRequest, res) => {
   res.json({ data, total: Number(countResult.rows[0].total), page: Number(page), pageSize: Number(pageSize) })
 })
 
-// Get single invoice
+// Get single invoice. Scope by the underlying customer's owner — invoices
+// inherit the customer's hierarchy, so a non-admin can only read invoices
+// they (or, for subadmin, their sub-users) created.
 router.get('/:id', async (req: AuthRequest, res) => {
-  const r = await pool.query('SELECT * FROM invoices WHERE id = $1', [req.params.id])
+  const r = await pool.query(
+    `SELECT i.*, c.user_id AS owner_id FROM invoices i
+     LEFT JOIN customers c ON c.id = i.customer_id
+     WHERE i.id = $1`,
+    [req.params.id],
+  )
   if (r.rows.length === 0) return res.status(404).json({ error: 'not found' })
   const row = r.rows[0]
+  if (!await canAccessUser(req.user!, row.owner_id)) {
+    return res.status(404).json({ error: 'not found' })
+  }
+  delete row.owner_id
   res.json({ ...row, amount: Number(row.amount), paid_amount: Number(row.paid_amount) })
 })
 

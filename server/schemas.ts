@@ -56,6 +56,13 @@ export const NameOnlySchema = z.object({
   name: z.string().min(1).max(200),
 })
 
+export const TransferCustomersSchema = z.object({
+  // Cap the array so an admin (or compromised admin token) can't issue a
+  // multi-million-row UPDATE on transfer.
+  customerIds: z.array(z.number().int().positive()).min(1).max(1000),
+  targetPlatform: z.string().min(1).max(200),
+})
+
 export const CreateInvoiceSchema = z.object({
   customer_id: z.number().int().positive(),
   customer_name: z.string().max(200).optional(),

@@ -16,7 +16,13 @@ router.get('/', async (_req, res) => {
 router.post('/', adminOnly, validate(NameOnlySchema), async (req: AuthRequest, res) => {
   try {
     const name = req.body.name.trim()
-    await pool.query('INSERT INTO ministries (name) VALUES ($1) ON CONFLICT DO NOTHING', [name])
+    const r = await pool.query(
+      'INSERT INTO ministries (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING *',
+      [name],
+    )
+    if (r.rowCount === 0) {
+      return res.status(409).json({ error: 'هذه الوزارة موجودة بالفعل' })
+    }
     await audit(req, 'create', 'ministry', null, `added ministry "${name}"`)
     emitEvent('ministry.created', req.user, null, name)
     res.json({ success: true })
@@ -29,6 +35,9 @@ router.post('/', adminOnly, validate(NameOnlySchema), async (req: AuthRequest, r
 router.delete('/:id', adminOnly, async (req: AuthRequest, res) => {
   const id = parseInt(req.params.id, 10)
   const existing = await pool.query('SELECT name FROM ministries WHERE id = $1', [id])
+  if (existing.rows.length === 0) {
+    return res.status(404).json({ error: 'الوزارة غير موجودة' })
+  }
   await pool.query('DELETE FROM ministries WHERE id = $1', [id])
   await audit(req, 'delete', 'ministry', id,
     `removed ministry "${existing.rows[0]?.name || ''}"`)

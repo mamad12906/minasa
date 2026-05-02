@@ -5,8 +5,9 @@ import { AuthRequest, authMiddleware } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissions'
 import { calculateReminderDate, calculateExpiryDate } from '../utils/reminder-utils'
 import { audit } from '../audit'
-import { validate, CreateCustomerSchema, UpdateCustomerSchema } from '../schemas'
+import { validate, CreateCustomerSchema, UpdateCustomerSchema, TransferCustomersSchema } from '../schemas'
 import { emitEvent } from '../events'
+import { canAccessUser } from '../utils/scope'
 
 /**
  * Guard for destructive bulk routes — require the admin to re-enter their
@@ -94,14 +95,44 @@ router.get('/', async (req: AuthRequest, res) => {
   res.json({ data, total: Number(countResult.rows[0].total), page: Number(page), pageSize: Number(pageSize) })
 })
 
-// Distinct values (MUST be before /:id)
-router.get('/meta/platforms', async (_req, res) => {
-  const r = await pool.query("SELECT DISTINCT platform_name FROM customers WHERE platform_name != '' ORDER BY platform_name")
+// Distinct values (MUST be before /:id). Scoped to the caller's hierarchy
+// so non-admin users don't see platform/category names from rows they
+// can't otherwise access.
+router.get('/meta/platforms', async (req: AuthRequest, res) => {
+  const role = req.user!.role
+  if (role === 'admin') {
+    const r = await pool.query(
+      "SELECT DISTINCT platform_name FROM customers WHERE platform_name != '' ORDER BY platform_name",
+    )
+    return res.json(r.rows.map(r => r.platform_name))
+  }
+  const params: any[] = [req.user!.id]
+  const scope = role === 'subadmin'
+    ? '(user_id = $1 OR user_id IN (SELECT id FROM users WHERE parent_id = $1))'
+    : 'user_id = $1'
+  const r = await pool.query(
+    `SELECT DISTINCT platform_name FROM customers WHERE platform_name != '' AND ${scope} ORDER BY platform_name`,
+    params,
+  )
   res.json(r.rows.map(r => r.platform_name))
 })
 
-router.get('/meta/categories', async (_req, res) => {
-  const r = await pool.query("SELECT DISTINCT category FROM customers WHERE category != '' ORDER BY category")
+router.get('/meta/categories', async (req: AuthRequest, res) => {
+  const role = req.user!.role
+  if (role === 'admin') {
+    const r = await pool.query(
+      "SELECT DISTINCT category FROM customers WHERE category != '' ORDER BY category",
+    )
+    return res.json(r.rows.map(r => r.category))
+  }
+  const params: any[] = [req.user!.id]
+  const scope = role === 'subadmin'
+    ? '(user_id = $1 OR user_id IN (SELECT id FROM users WHERE parent_id = $1))'
+    : 'user_id = $1'
+  const r = await pool.query(
+    `SELECT DISTINCT category FROM customers WHERE category != '' AND ${scope} ORDER BY category`,
+    params,
+  )
   res.json(r.rows.map(r => r.category))
 })
 
@@ -133,11 +164,16 @@ router.delete('/user/:userId/delete', async (req: AuthRequest, res) => {
   res.json({ success: true, deleted: result.rowCount })
 })
 
-// Get single customer
+// Get single customer. Scope check after fetch — return 404 (not 403) when
+// the caller doesn't own the row so they can't probe for existence.
 router.get('/:id', async (req: AuthRequest, res) => {
   const result = await pool.query('SELECT * FROM customers WHERE id = $1', [req.params.id])
   if (result.rows.length === 0) return res.status(404).json({ error: 'not found' })
-  res.json(result.rows[0])
+  const cust = result.rows[0]
+  if (!await canAccessUser(req.user!, cust.user_id)) {
+    return res.status(404).json({ error: 'not found' })
+  }
+  res.json(cust)
 })
 
 // Create customer
@@ -241,20 +277,34 @@ router.delete('/:id', requirePermission('delete_customer'), async (req: AuthRequ
   res.json({ success: true })
 })
 
-// Customer reminders
-router.get('/:id/reminders', async (req, res) => {
-  const r = await pool.query('SELECT * FROM reminders WHERE customer_id = $1 ORDER BY created_at DESC', [req.params.id])
+// Customer reminders. Same scope check as GET /:id — non-admin users
+// must not see reminders on customers they don't own.
+router.get('/:id/reminders', async (req: AuthRequest, res) => {
+  const owner = await pool.query('SELECT user_id FROM customers WHERE id = $1', [req.params.id])
+  if (owner.rows.length === 0) return res.status(404).json({ error: 'not found' })
+  if (!await canAccessUser(req.user!, owner.rows[0].user_id)) {
+    return res.status(404).json({ error: 'not found' })
+  }
+  const r = await pool.query(
+    'SELECT * FROM reminders WHERE customer_id = $1 ORDER BY created_at DESC',
+    [req.params.id],
+  )
   res.json(r.rows)
 })
 
-// Transfer customers (admin)
-router.post('/transfer', async (req: AuthRequest, res) => {
+// Transfer customers between platforms (admin only). Now: validated input,
+// audit-logged, single bulk UPDATE instead of N round-trips.
+router.post('/transfer', validate(TransferCustomersSchema), async (req: AuthRequest, res) => {
   if (req.user!.role !== 'admin') return res.status(403).json({ error: 'admin only' })
-  const { customerIds, targetPlatform } = req.body
-  for (const id of customerIds) {
-    await pool.query("UPDATE customers SET platform_name = $1, updated_at = NOW() WHERE id = $2", [targetPlatform, id])
-  }
-  res.json({ success: true })
+  const { customerIds, targetPlatform } = req.body as { customerIds: number[]; targetPlatform: string }
+  const result = await pool.query(
+    'UPDATE customers SET platform_name = $1, updated_at = NOW() WHERE id = ANY($2::int[])',
+    [targetPlatform, customerIds],
+  )
+  await audit(req, 'transfer', 'customer', null,
+    `transferred ${result.rowCount} customers to "${targetPlatform}"`)
+  emitEvent('customer.updated', req.user, null, '')
+  res.json({ success: true, transferred: result.rowCount })
 })
 
 // Change customer owner — admin only. Simpler than going through PUT /:id

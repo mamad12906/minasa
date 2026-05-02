@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { pool } from '../db'
 import { authMiddleware, adminOnly } from '../middleware/auth'
+import { validate, NameOnlySchema } from '../schemas'
 
 const router = Router()
 router.use(authMiddleware)
@@ -10,9 +11,19 @@ router.get('/', async (_req, res) => {
   res.json(r.rows)
 })
 
-router.post('/', adminOnly, async (req, res) => {
+router.post('/', adminOnly, validate(NameOnlySchema), async (req, res) => {
   try {
-    await pool.query('INSERT INTO platforms (name) VALUES ($1) ON CONFLICT DO NOTHING', [req.body.name])
+    const name = req.body.name.trim()
+    // RETURNING * is empty when ON CONFLICT skipped the insert — distinguish
+    // a genuine create from a duplicate so the client can show a useful
+    // error instead of believing it succeeded.
+    const r = await pool.query(
+      'INSERT INTO platforms (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING *',
+      [name],
+    )
+    if (r.rowCount === 0) {
+      return res.status(409).json({ error: 'هذه المنصة موجودة بالفعل' })
+    }
     res.json({ success: true })
   } catch (err: any) {
     console.error('[platforms.create]', err.message)
@@ -21,7 +32,10 @@ router.post('/', adminOnly, async (req, res) => {
 })
 
 router.delete('/:id', adminOnly, async (req, res) => {
-  await pool.query('DELETE FROM platforms WHERE id = $1', [req.params.id])
+  const r = await pool.query('DELETE FROM platforms WHERE id = $1', [req.params.id])
+  if (r.rowCount === 0) {
+    return res.status(404).json({ error: 'المنصة غير موجودة' })
+  }
   res.json({ success: true })
 })
 
