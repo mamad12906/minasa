@@ -215,6 +215,10 @@ router.post('/', requirePermission('add_customer'), validate(CreateCustomerSchem
 router.put('/:id', requirePermission('edit_customer'), validate(UpdateCustomerSchema), async (req: AuthRequest, res) => {
   const input = req.body
   const existing = await pool.query('SELECT user_id FROM customers WHERE id = $1', [req.params.id])
+  if (existing.rows.length === 0) return res.status(404).json({ error: 'not found' })
+  if (!await canAccessUser(req.user!, existing.rows[0].user_id)) {
+    return res.status(404).json({ error: 'not found' })
+  }
   const originalUserId = existing.rows[0]?.user_id || req.user!.id
   const result = await pool.query(
     `UPDATE customers SET platform_name=$1, full_name=$2, mother_name=$3, nickname=$4, phone_number=$5, card_number=$6, category=$7, ministry_name=$8, status_note=$9, reminder_date=$10, reminder_text=$11, user_id=$12, months_count=$13, notes=$14, updated_at=NOW() WHERE id=$15 RETURNING *`,
@@ -268,7 +272,15 @@ router.put('/:id', requirePermission('edit_customer'), validate(UpdateCustomerSc
 
 // Delete customer
 router.delete('/:id', requirePermission('delete_customer'), async (req: AuthRequest, res) => {
-  const existing = await pool.query('SELECT full_name FROM customers WHERE id = $1', [req.params.id])
+  const existing = await pool.query(
+    'SELECT full_name, user_id FROM customers WHERE id = $1',
+    [req.params.id],
+  )
+  if (existing.rows.length === 0) return res.status(404).json({ error: 'not found' })
+  if (!await canAccessUser(req.user!, existing.rows[0].user_id)) {
+    // 404 not 403 — don't leak existence to non-owners.
+    return res.status(404).json({ error: 'not found' })
+  }
   await pool.query('DELETE FROM customers WHERE id = $1', [req.params.id])
   await audit(req, 'delete', 'customer', parseInt(req.params.id, 10),
     `deleted customer ${existing.rows[0]?.full_name || ''}`)

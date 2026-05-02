@@ -1,7 +1,9 @@
 import { Router } from 'express'
 import { pool } from '../db'
-import { authMiddleware, adminOnly } from '../middleware/auth'
+import { AuthRequest, authMiddleware, adminOnly } from '../middleware/auth'
 import { validate, NameOnlySchema } from '../schemas'
+import { audit } from '../audit'
+import { emitEvent } from '../events'
 
 const router = Router()
 router.use(authMiddleware)
@@ -11,7 +13,7 @@ router.get('/', async (_req, res) => {
   res.json(r.rows)
 })
 
-router.post('/', adminOnly, validate(NameOnlySchema), async (req, res) => {
+router.post('/', adminOnly, validate(NameOnlySchema), async (req: AuthRequest, res) => {
   try {
     const name = req.body.name.trim()
     // RETURNING * is empty when ON CONFLICT skipped the insert — distinguish
@@ -24,6 +26,8 @@ router.post('/', adminOnly, validate(NameOnlySchema), async (req, res) => {
     if (r.rowCount === 0) {
       return res.status(409).json({ error: 'هذه المنصة موجودة بالفعل' })
     }
+    await audit(req, 'create', 'platform', r.rows[0].id, `added platform "${name}"`)
+    emitEvent('platform.created', req.user, r.rows[0].id, name)
     res.json({ success: true })
   } catch (err: any) {
     console.error('[platforms.create]', err.message)
@@ -31,11 +35,16 @@ router.post('/', adminOnly, validate(NameOnlySchema), async (req, res) => {
   }
 })
 
-router.delete('/:id', adminOnly, async (req, res) => {
-  const r = await pool.query('DELETE FROM platforms WHERE id = $1', [req.params.id])
-  if (r.rowCount === 0) {
+router.delete('/:id', adminOnly, async (req: AuthRequest, res) => {
+  const id = parseInt(req.params.id, 10)
+  const existing = await pool.query('SELECT name FROM platforms WHERE id = $1', [id])
+  if (existing.rows.length === 0) {
     return res.status(404).json({ error: 'المنصة غير موجودة' })
   }
+  await pool.query('DELETE FROM platforms WHERE id = $1', [id])
+  await audit(req, 'delete', 'platform', id,
+    `removed platform "${existing.rows[0]?.name || ''}"`)
+  emitEvent('platform.deleted', req.user, id, existing.rows[0]?.name || '')
   res.json({ success: true })
 })
 

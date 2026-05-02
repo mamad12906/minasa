@@ -124,9 +124,17 @@ router.put('/:id', requirePermission('edit_invoice'), validate(UpdateInvoiceSche
   const input = req.body
   const id = parseInt(req.params.id, 10)
 
-  const existing = await pool.query('SELECT * FROM invoices WHERE id = $1', [id])
+  const existing = await pool.query(
+    `SELECT i.*, c.user_id AS owner_id FROM invoices i
+     LEFT JOIN customers c ON c.id = i.customer_id
+     WHERE i.id = $1`,
+    [id],
+  )
   if (existing.rows.length === 0) return res.status(404).json({ error: 'not found' })
   const cur = existing.rows[0]
+  if (!await canAccessUser(req.user!, cur.owner_id)) {
+    return res.status(404).json({ error: 'not found' })
+  }
 
   const amount = input.amount !== undefined ? Number(input.amount) : Number(cur.amount)
   const paid = input.paid_amount !== undefined ? Number(input.paid_amount) : Number(cur.paid_amount)
@@ -168,7 +176,16 @@ router.put('/:id', requirePermission('edit_invoice'), validate(UpdateInvoiceSche
 // Delete invoice
 router.delete('/:id', requirePermission('delete_invoice'), async (req: AuthRequest, res) => {
   const id = parseInt(req.params.id, 10)
-  const existing = await pool.query('SELECT customer_name FROM invoices WHERE id = $1', [id])
+  const existing = await pool.query(
+    `SELECT i.customer_name, c.user_id AS owner_id FROM invoices i
+     LEFT JOIN customers c ON c.id = i.customer_id
+     WHERE i.id = $1`,
+    [id],
+  )
+  if (existing.rows.length === 0) return res.status(404).json({ error: 'not found' })
+  if (!await canAccessUser(req.user!, existing.rows[0].owner_id)) {
+    return res.status(404).json({ error: 'not found' })
+  }
   await pool.query('DELETE FROM invoices WHERE id = $1', [id])
   await audit(req, 'delete', 'invoice', id,
     `deleted invoice #${id} (${existing.rows[0]?.customer_name || ''})`)

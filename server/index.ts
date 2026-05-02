@@ -151,7 +151,10 @@ app.use('/api/users', (req, res, next) => {
   // Match POST /api/users/:id/reset-password and pull `:id` from the path.
   const m = req.method === 'POST' && /^\/(\d+)\/reset-password\/?$/.exec(req.path)
   if (!m) return next()
-  const userId = m[1]
+  // Stringify the id explicitly so the Map key type is consistent — Map
+  // lookups use SameValueZero, so '5' and 5 would collide as different
+  // entries if any other code path inserts a numeric key.
+  const userId = String(m[1])
   const now = Date.now()
   const e = pwResetByUser.get(userId)
   if (e && now < e.reset) {
@@ -160,6 +163,13 @@ app.use('/api/users', (req, res, next) => {
     }
     e.count++
   } else {
+    // Same eviction guard as the IP-keyed limiter — sweep runs hourly so a
+    // burst of unique target users between sweeps could otherwise grow
+    // unbounded.
+    if (pwResetByUser.size >= RATE_LIMITS_MAX_KEYS) {
+      const oldest = pwResetByUser.keys().next().value
+      if (oldest != null) pwResetByUser.delete(oldest)
+    }
     pwResetByUser.set(userId, { count: 1, reset: now + PWRESET_WINDOW_MS })
   }
   next()
