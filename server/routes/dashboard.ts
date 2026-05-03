@@ -30,6 +30,31 @@ router.get('/stats', async (req: AuthRequest, res) => {
   const mins = await pool.query(`SELECT ministry_name, COUNT(*)::int as count FROM customers WHERE ministry_name != '' ${filterAnd} GROUP BY ministry_name ORDER BY count DESC LIMIT 15`, params)
   const recent = await pool.query(`SELECT *, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI') as created_at_fmt FROM customers ${filter} ORDER BY created_at DESC LIMIT 10`, params)
 
+  // Last-7-days new-customer series, in chronological order so the mobile
+  // sparkline rises when activity is up and falls when it stops. The CTE
+  // generates the 7 buckets so days with zero additions still render as a
+  // dip rather than being skipped (which would make every day look "up").
+  const trend = await pool.query(
+    `WITH days AS (
+       SELECT generate_series(
+         (CURRENT_DATE - INTERVAL '6 days')::date,
+         CURRENT_DATE,
+         INTERVAL '1 day'
+       )::date AS day
+     )
+     SELECT TO_CHAR(d.day, 'YYYY-MM-DD') AS day,
+            COALESCE(c.cnt, 0)::int AS count
+     FROM days d
+     LEFT JOIN (
+       SELECT created_at::date AS day, COUNT(*) AS cnt
+       FROM customers
+       ${filter ? `${filter} AND ` : 'WHERE '}created_at >= CURRENT_DATE - INTERVAL '6 days'
+       GROUP BY 1
+     ) c ON c.day = d.day
+     ORDER BY d.day ASC`,
+    params,
+  )
+
   // Employee customer counts. Admin sees everyone non-admin; subadmin sees
   // only their sub-users; regular user: empty (no reports under them).
   let employeeStats: any[] = []
@@ -54,7 +79,8 @@ router.get('/stats', async (req: AuthRequest, res) => {
     categoryBreakdown: cats.rows,
     ministryBreakdown: mins.rows,
     recentCustomers: recent.rows.map(r => ({ ...r, created_at: r.created_at_fmt || r.created_at })),
-    employeeStats
+    employeeStats,
+    last7Days: trend.rows.map(r => ({ day: r.day, count: r.count })),
   })
 })
 
